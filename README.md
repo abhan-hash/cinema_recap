@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 > "Previously on... but built for you specifically."
 
@@ -117,3 +118,6 @@ recapai/
 | Frontend | React + Vite |
 =======
 # cinema_
+=======
+# cinema_recap
+>>>>>>> 7254362ccc76b7eea93e33f8214824b6f373a7f4
