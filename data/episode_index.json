@@ -1,0 +1,18 @@
+{
+  "series_name": "Chaplin Shorts",
+  "collection_id": "c-ac63bcea-2f81-462e-ab60-380de77343f6",
+  "characters": [
+    "Charlie",
+    "The Tramp",
+    "The Lion",
+    "The Boxer",
+    "The Referee"
+  ],
+  "episodes": {
+    "1": {
+      "video_id": "m-z-019f99ca-66c8-7612-b792-373fc2e7ca6b",
+      "title": "The Lion's Cage",
+      "number": 1
+    }
+  }
+}
