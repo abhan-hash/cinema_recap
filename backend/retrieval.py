@@ -400,7 +400,7 @@ Actions available: extend_start, extend_end, drop, trim"""
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.0,
-                    max_tokens=8000,
+                    max_tokens=1000,
                 )
                 raw = response.choices[0].message.content.strip()
                 # Strip <think> tags if present

@@ -31,7 +31,7 @@ CLIP_SECONDS = {
 def _fetch_episode_transcripts(
     watched_episode_numbers: list[int],
     episodes: dict,
-    max_chars_per_ep: int = 8000,
+    max_chars_per_ep: int = 4000,
 ) -> dict[int, str]:
     coll = get_collection()
     transcripts = {}
@@ -70,7 +70,7 @@ def _call_llm(prompt: str, client: OpenAI) -> str:
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=8000,
+                max_tokens=1500,
             )
             raw = response.choices[0].message.content.strip()
             # Strip <think> tags if present
