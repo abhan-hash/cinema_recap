@@ -31,7 +31,7 @@ CLIP_SECONDS = {
 def _fetch_episode_transcripts(
     watched_episode_numbers: list[int],
     episodes: dict,
-    max_chars_per_ep: int = 8000,
+    max_chars_per_ep: int = 4000,
 ) -> dict[int, str]:
     """
     Fetch the actual transcript text for each watched episode from VideoDB.
@@ -154,7 +154,7 @@ def plan_recap(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=2000,
+                max_tokens=800,
             )
             raw = response.choices[0].message.content.strip()
             print(f"   Groq response: {len(raw)} chars (using {model})")

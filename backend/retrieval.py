@@ -394,7 +394,7 @@ Actions available: extend_start, extend_end, drop, trim"""
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.0,
-                    max_tokens=800,
+                    max_tokens=400,
                 )
                 raw = response.choices[0].message.content.strip()
                 break
