@@ -8,7 +8,7 @@ Every streaming platform gives every viewer the same "Previously on..." recap. R
 - **How long ago** — watched last night vs 6 months ago → different depth
 - **Which character you care about** — recap focused on that arc
 
-An AI planning agent (Claude) decides which 5–8 moments are essential context for *your* specific next episode. VideoDB retrieves the exact clips from the archive using semantic search. AI-generated bridging narration ties the clips together.
+An AI planning agent decides which moments are essential context for *your* specific next episode. VideoDB retrieves the exact clips from the archive using semantic search. AI-generated bridging narration ties the clips together.
 
 
 ## Architecture
@@ -16,11 +16,11 @@ An AI planning agent (Claude) decides which 5–8 moments are essential context 
 ```
 User state (watched eps, time, character)
         ↓
-Layer 2: Claude planning agent → recap brief (list of moments to find)
+Layer 2: Planning agent → recap brief (list of moments to find)
         ↓
 Layer 3: VideoDB semantic search → exact timestamps + clips
         ↓
-Layer 4: Claude narration scripts + OpenAI TTS audio
+Layer 4: Narration scripts + OpenAI TTS audio
         ↓
 Frontend: Sequenced player (narration → clip → narration → clip...)
 ```
@@ -41,8 +41,7 @@ Frontend: Sequenced player (narration → clip → narration → clip...)
 cp .env.example .env
 # Edit .env with your keys:
 # VIDEODB_API_KEY=...
-# ANTHROPIC_API_KEY=...
-# OPENAI_API_KEY=...  (optional, for TTS narration audio)
+# GEMINI_API_KEY=...
 ```
 
 ### 2. Configure your series
