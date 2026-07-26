@@ -400,9 +400,12 @@ Actions available: extend_start, extend_end, drop, trim"""
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.0,
-                    max_tokens=800,
+                    max_tokens=8000,
                 )
                 raw = response.choices[0].message.content.strip()
+                # Strip <think> tags if present
+                raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+                raw = re.sub(r'<think>.*', '', raw, flags=re.DOTALL).strip()
                 break
             except Exception as e:
                 err_str = str(e).lower()

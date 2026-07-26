@@ -70,9 +70,14 @@ def _call_llm(prompt: str, client: OpenAI) -> str:
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=2000,
+                max_tokens=8000,
             )
-            return response.choices[0].message.content.strip()
+            raw = response.choices[0].message.content.strip()
+            # Strip <think> tags if present
+            raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+            # Strip unclosed <think> tag if truncated
+            raw = re.sub(r'<think>.*', '', raw, flags=re.DOTALL).strip()
+            return raw
         except Exception as e:
             last_err = e
             err_str = str(e).lower()
