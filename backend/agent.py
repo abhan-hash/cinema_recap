@@ -59,7 +59,8 @@ def _call_llm(prompt: str, client: OpenAI) -> str:
     models = [
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
         "gemma2-9b-it"
     ]
     
@@ -75,12 +76,13 @@ def _call_llm(prompt: str, client: OpenAI) -> str:
             return response.choices[0].message.content.strip()
         except Exception as e:
             last_err = e
-            if "rate_limit_exceeded" in str(e).lower() or "429" in str(e):
-                print(f"   ⚠️  Rate limited on {model}, falling back to next model...")
+            err_str = str(e).lower()
+            if "rate_limit" in err_str or "429" in err_str or "400" in err_str or "decommissioned" in err_str:
+                print(f"   ⚠️  Model {model} failed ({err_str[:40]}...), falling back to next model...")
                 continue
             raise e
             
-    raise RuntimeError(f"All models failed or rate limited. Last error: {last_err}")
+    raise RuntimeError(f"All models failed. Last error: {last_err}")
 
 
 def _run_researcher_agent(transcripts: dict[int, str], series_name: str, client: OpenAI) -> str:

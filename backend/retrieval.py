@@ -389,7 +389,8 @@ Actions available: extend_start, extend_end, drop, trim"""
         models = [
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768",
+            "llama3-70b-8192",
+            "llama3-8b-8192",
             "gemma2-9b-it"
         ]
         
@@ -405,13 +406,14 @@ Actions available: extend_start, extend_end, drop, trim"""
                 raw = response.choices[0].message.content.strip()
                 break
             except Exception as e:
-                if "rate_limit_exceeded" in str(e).lower() or "429" in str(e):
-                    print(f"   ⚠️  QA LLM Rate limited on {model}, falling back...")
+                err_str = str(e).lower()
+                if "rate_limit" in err_str or "429" in err_str or "400" in err_str or "decommissioned" in err_str:
+                    print(f"   ⚠️  QA LLM failed on {model} ({err_str[:40]}...), falling back...")
                     continue
                 raise e
                 
         if raw is None:
-            raise RuntimeError("All models failed or rate limited during QA")
+            raise RuntimeError("All models failed during QA")
             
         raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
         raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
