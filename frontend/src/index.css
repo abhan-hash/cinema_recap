@@ -93,7 +93,7 @@ html, body, #root {
   width: 100%;
   height: 80vh;
   min-height: 600px;
-  background-image: url('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=2525&auto=format&fit=crop'); /* Cinematic placeholder */
+  background-image: url('https://image.tmdb.org/t/p/original/ggFHVNu6YYI5L9pCfOacjizRGt.jpg'); /* Breaking Bad Background */
   background-size: cover;
   background-position: center 20%;
   margin-bottom: -100px; /* Pull the rows up over the vignette */
@@ -272,75 +272,41 @@ html, body, #root {
 
 /* ── Generating screen ── */
 .generating-screen {
-  text-align: center;
-  padding: 60px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  padding: 40px;
 }
 
-.generating-spinner {
-  width: 64px; height: 64px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
+.netflix-spinner {
+  width: 64px;
+  height: 64px;
+  border: 4px solid rgba(229, 9, 20, 0.2);
+  border-top-color: #E50914;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 32px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 32px;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.generating-title {
+.generating-step-text {
   font-size: 1.5rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
-  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+  color: #fff;
+  text-transform: uppercase;
+  animation: pulse-text 2s infinite ease-in-out;
 }
 
-.generating-subtitle {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 40px;
+@keyframes pulse-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
-.steps-list {
-  text-align: left;
-  display: inline-flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 300px;
-}
 
-.step-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.88rem;
-  color: var(--text-dim);
-  transition: var(--transition);
-}
-
-.step-item.active { color: var(--text); }
-.step-item.done   { color: var(--green); }
-
-.step-icon {
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  border: 1.5px solid currentColor;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-
-.step-item.active .step-icon {
-  border-color: var(--accent);
-  color: var(--accent);
-  animation: step-pulse 1s ease-in-out infinite;
-}
-
-.step-item.done .step-icon { background: var(--green); border-color: var(--green); color: #fff; }
-
-@keyframes step-pulse {
-  0%,100% { box-shadow: 0 0 0 0 rgba(224,92,42,0.4); }
-  50%      { box-shadow: 0 0 0 6px rgba(224,92,42,0); }
-}
 
 /* ── Recap player ── */
 .recap-header {
