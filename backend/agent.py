@@ -144,14 +144,23 @@ def plan_recap(
     print(f"🤖 Calling Groq (prompt: {len(prompt)} chars)...")
 
     client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",   # Use the bigger model for grounded selection
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=2000,
-    )
-    raw = response.choices[0].message.content.strip()
-    print(f"   Groq response: {len(raw)} chars")
+    
+    models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    for model in models:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=2000,
+            )
+            raw = response.choices[0].message.content.strip()
+            print(f"   Groq response: {len(raw)} chars (using {model})")
+            break
+        except Exception as e:
+            if "rate_limit" in str(e).lower() or "429" in str(e):
+                continue
+            raise e
 
     # Strip markdown fences
     raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)

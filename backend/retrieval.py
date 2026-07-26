@@ -385,13 +385,21 @@ Actions available: extend_start, extend_end, drop, trim"""
         import json, re
         from openai import OpenAI
         client = OpenAI(api_key=groq_api_key, base_url="https://api.groq.com/openai/v1")
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=800,
-        )
-        raw = response.choices[0].message.content.strip()
+        models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        for model in models:
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=800,
+                )
+                raw = response.choices[0].message.content.strip()
+                break
+            except Exception as e:
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    continue
+                raise e
         raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
         raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
         data = json.loads(raw)
