@@ -385,10 +385,9 @@ Actions available: extend_start, extend_end, drop, trim"""
         import json, re
         from openai import OpenAI
         client = OpenAI(api_key=groq_api_key, base_url="https://api.groq.com/openai/v1")
-        
         models = [
-            "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
+            "llama-3.3-70b-versatile",
             "qwen/qwen3.6-27b",
             "openai/gpt-oss-120b"
         ]
@@ -396,14 +395,13 @@ Actions available: extend_start, extend_end, drop, trim"""
         raw = None
         for model in models:
             try:
-                kwargs = {
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.0,
-                    "max_tokens": 1000,
-                    "response_format": {"type": "json_object"}
-                }
-                response = client.chat.completions.create(**kwargs)
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=800,
+                    response_format={"type": "json_object"}
+                )
                 raw = response.choices[0].message.content.strip()
                 # Strip <think> tags if present
                 raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
@@ -418,9 +416,6 @@ Actions available: extend_start, extend_end, drop, trim"""
                 
         if raw is None:
             raise RuntimeError("All models failed during QA")
-            
-        raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
-        raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
         data = json.loads(raw)
         adjustments = data.get("adjustments", [])
         print(f"   LLM flagged {len(adjustments)} issues")
