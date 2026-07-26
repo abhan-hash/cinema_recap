@@ -1,10 +1,4 @@
-<<<<<<< HEAD
 
-> "Previously on... but built for you specifically."
-
-**VideoDB Global Media Intelligence Hackathon 2026**
-
----
 
 ## What it does
 
