@@ -72,21 +72,17 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="logo">
-          <span className="logo-dot" />
-          RecapAI
+          CINEMA RECAP
         </div>
-        <span className="header-badge">VideoDB Hackathon 2026</span>
       </header>
 
       <main className="main">
         {screen === 'form' && (
           <>
             <div className="hero">
-              <div className="hero-eyebrow">Personalised TV Recaps</div>
-              <h1>Previously on...<br />but built for you</h1>
+              <h1>Catch up in seconds.</h1>
               <p>
-                Tell us what you've watched and when. We'll pull the exact moments
-                you need from the archive — no spoilers, no filler.
+                Select your place in the series. We generate a seamless, director's cut recap of exactly what you need to remember. No spoilers.
               </p>
             </div>
 

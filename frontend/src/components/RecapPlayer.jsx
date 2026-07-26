@@ -202,17 +202,13 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
       </div>
 
       {clip?.episode_number && (
-        <div className="video-meta">
-          <span className="video-ep-tag">
-            Ep {clip.episode_number} · {clip.episode_title}
-            {' · '}{(clip.start || 0).toFixed(0)}s – {(clip.end || 0).toFixed(0)}s
-          </span>
-          <span className="video-score">
-            <div className="score-bar">
-              <div className="score-fill" style={{ width: `${scorePercent}%` }} />
-            </div>
-            <span>{scorePercent}% match</span>
-          </span>
+        <div style={{ marginTop: 16, padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '1.2rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+            {clip.episode_title}
+          </div>
+          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 4 }}>
+            Episode {clip.episode_number}
+          </div>
         </div>
       )}
     </div>
@@ -298,6 +294,7 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
                 <div
                   key={i}
                   className={`segment ${i === activeIndex ? 'active-segment' : ''}`}
+                  style={{ display: i === activeIndex ? 'block' : 'none', border: 'none', background: 'transparent' }}
                   onClick={() => setActiveIndex(i)}
                 >
                   <ClipPlayer
@@ -310,74 +307,52 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
               ))}
             </div>
 
-            <div className="controls-bar" style={{ marginTop: 24 }}>
-              <button className="ctrl-btn" onClick={goPrev} disabled={activeIndex === 0}>← Prev</button>
-              <button className="ctrl-btn" style={{ flex: 2, fontSize: '0.8rem', color: 'var(--text-dim)' }} disabled>
-                {activeIndex + 1} / {segments.length}
+            <div style={{ display: 'flex', gap: 12, marginTop: 24, justifyContent: 'center' }}>
+              <button 
+                className="ctrl-btn" 
+                onClick={goPrev} 
+                disabled={activeIndex === 0}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '12px 24px', borderRadius: 4, fontWeight: 700 }}
+              >
+                ← Previous
               </button>
-              <button className="ctrl-btn" onClick={goNext} disabled={activeIndex === segments.length - 1}>Next →</button>
-            </div>
-
-            <div className="controls-bar" style={{ marginTop: 12 }}>
-              <button className="ctrl-btn" onClick={onReset}>← Change settings</button>
-              <button className="ctrl-btn primary" onClick={() => setActiveIndex(0)}>↺ Replay</button>
-            </div>
-
-            {/* Evidence panel */}
-            <div className="card" style={{ marginTop: 32 }}>
-              <div className="card-title">VideoDB retrieval evidence</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {segments.map((seg, i) => {
-                  const MOOD_COLORS = {
-                    tense:'#fca5a5', dramatic:'#d8b4fe', calm:'#93c5fd', action:'#fdba74', sad:'#94a3b8'
-                  }
-                  const MOOD_BG = {
-                    tense:'rgba(239,68,68,0.12)', dramatic:'rgba(168,85,247,0.12)',
-                    calm:'rgba(59,130,246,0.12)', action:'rgba(249,115,22,0.12)', sad:'rgba(100,116,139,0.12)'
-                  }
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        display: 'flex', gap: 12, alignItems: 'flex-start',
-                        padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                        background: i === activeIndex ? 'rgba(224,92,42,0.06)' : 'var(--bg-raised)',
-                        border: i === activeIndex ? '1px solid rgba(224,92,42,0.3)' : '1px solid var(--border)',
-                      }}
-                      onClick={() => setActiveIndex(i)}
-                    >
-                      <div style={{
-                        width: 24, height: 24, borderRadius: 6, flexShrink: 0,
-                        background: 'var(--bg-card)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.72rem', fontWeight: 700,
-                        color: i === activeIndex ? 'var(--accent)' : 'var(--text-dim)',
-                      }}>{i + 1}</div>
-
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text)', marginBottom: 4, fontWeight: 500 }}>
-                          Ep {seg.clip.episode_number}: {seg.clip.episode_title}
-                          <span style={{
-                            marginLeft: 8, fontSize: '0.65rem', padding: '1px 7px', borderRadius: 99,
-                            background: MOOD_BG[seg.clip.mood] || 'rgba(255,255,255,0.05)',
-                            color: MOOD_COLORS[seg.clip.mood] || '#aaa', fontWeight: 600,
-                          }}>
-                            {seg.clip.mood}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                          {seg.clip.moment_description?.slice(0, 90)}…
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', flexShrink: 0, textAlign: 'right' }}>
-                        <div>{(seg.clip.start || 0).toFixed(0)}s – {(seg.clip.end || 0).toFixed(0)}s</div>
-                        <div>{(seg.clip.end - seg.clip.start).toFixed(1)}s · {Math.round((seg.clip.search_score || 0) * 100)}% match</div>
-                      </div>
-                    </div>
-                  )
-                })}
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 16px' }}>
+                {segments.map((_, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => setActiveIndex(i)}
+                    style={{
+                      width: i === activeIndex ? 24 : 8,
+                      height: 8,
+                      borderRadius: 4,
+                      background: i === activeIndex ? 'var(--accent)' : 'rgba(255,255,255,0.2)',
+                      transition: '0.3s',
+                      cursor: 'pointer'
+                    }}
+                  />
+                ))}
               </div>
+
+              <button 
+                className="ctrl-btn" 
+                onClick={goNext} 
+                disabled={activeIndex === segments.length - 1}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '12px 24px', borderRadius: 4, fontWeight: 700 }}
+              >
+                Next →
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 32 }}>
+              <button 
+                onClick={onReset}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '10px 24px', borderRadius: 4, cursor: 'pointer', transition: '0.2s' }}
+                onMouseEnter={e => { e.target.style.color = '#fff'; e.target.style.borderColor = '#fff' }}
+                onMouseLeave={e => { e.target.style.color = 'rgba(255,255,255,0.6)'; e.target.style.borderColor = 'rgba(255,255,255,0.2)' }}
+              >
+                Start New Recap
+              </button>
             </div>
           </>
         )}
