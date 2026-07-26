@@ -386,8 +386,8 @@ Actions available: extend_start, extend_end, drop, trim"""
         from openai import OpenAI
         client = OpenAI(api_key=groq_api_key, base_url="https://api.groq.com/openai/v1")
         models = [
-            "llama-3.1-8b-instant",
             "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
             "qwen/qwen3.6-27b",
             "openai/gpt-oss-120b"
         ]

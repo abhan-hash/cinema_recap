@@ -75,19 +75,9 @@ def _build_prompt(
         else "Balance beats across the main story threads."
     )
 
-    # Build the grounded transcript block
-    transcript_block = ""
-    for ep_num in sorted(transcripts.keys()):
-        ep_title = episodes[str(ep_num)]["title"]
-        transcript_block += f"\n\n--- EPISODE {ep_num}: {ep_title} TRANSCRIPT ---\n"
-        transcript_block += transcripts[ep_num]
-
     return f"""You are an expert TV editor cutting a 'Previously on {series_name}...' cold-open.
 
-IMPORTANT: You are working ONLY from the transcripts below. Do NOT invent scenes or dialogue from your training data.
-Every moment you pick MUST be directly supported by text you can see in the transcripts.
-
-{transcript_block}
+IMPORTANT: You are building this recap based on your deep internal knowledge of the television show '{series_name}'.
 
 ---
 
@@ -95,21 +85,21 @@ TASK: The viewer watched Episodes {sorted(user_state.watched_episodes)} and is a
 {focus_line}
 Known characters: {', '.join(characters)}
 
-Pick EXACTLY {n_beats} beats for the recap. Think like a MASTER SHOWRUNNER:
-- MULTI-THREAD NARRATIVE: Identify the "A-Plot" and "B-Plot" from the transcripts. Weave beats from both threads chronologically so the recap has true narrative structure.
+Pick EXACTLY {n_beats} beats for the recap from Episodes {sorted(user_state.watched_episodes)}. Think like a MASTER SHOWRUNNER:
+- MULTI-THREAD NARRATIVE: Identify the "A-Plot" and "B-Plot" for these specific episodes. Weave beats from both threads chronologically so the recap has true narrative structure.
 - PACING & RHYTHM (B-ROLL): Inject at least 1-2 "B-roll" action shots (e.g. scenic transitions, silent reactions, driving) between heavy dialogue scenes to let the recap breathe. For these, `exact_dialogue` MUST be null.
 - Sequence beats to BUILD — setup → rising stakes → biggest shock/cliffhanger.
 - Prefer moments that set up UNRESOLVED tension going into Episode {user_state.next_episode}.
 
 For EACH beat, provide:
-- `moment_description`: What is happening visually (keep to 1 sentence)
-- `exact_dialogue`: The EXACT line of dialogue from the transcript above that anchors this moment. MUST be verbatim. If it's a B-Roll/action beat, set to null.
+- `moment_description`: Highly detailed visual description of the scene (keep to 1 sentence)
+- `exact_dialogue`: The most iconic, punchy line of dialogue spoken in this specific moment. Quote it exactly as you remember it from the show. If it's a B-Roll/action beat, set to null.
 - `episode`: episode number (integer)
 - `clip_duration_seconds`: seconds this beat needs ({beat_secs-2}–{beat_secs+4}s range).
 - `mood`: one of: tense | dramatic | calm | action | sad
 - `importance`: one of: critical | important | context | b-roll
 
-Return ONLY valid JSON — no markdown, no code fences:
+Return ONLY valid JSON:
 {{"moments": [
   {{"moment_description": "...", "exact_dialogue": "...", "episode": 1, "clip_duration_seconds": {beat_secs}, "mood": "tense", "importance": "critical", "characters_involved": ["Walter White"]}}
 ]}}"""
@@ -130,24 +120,15 @@ def plan_recap(
     if not GROQ_API_KEY:
         raise ValueError("GROQ_API_KEY not set — get one free at https://console.groq.com/keys")
 
-    # Step 1: Load real transcripts
-    print("📄 Loading episode transcripts from VideoDB...")
-    transcripts = _fetch_episode_transcripts(
-        watched_episode_numbers=user_state.watched_episodes,
-        episodes=episodes,
-    )
-    if not transcripts:
-        raise ValueError("Could not load any episode transcripts from VideoDB")
-
-    # Step 2: Build grounded prompt and call Groq
-    prompt = _build_prompt(user_state, series_name, characters, episodes, transcripts)
+    # Step 1: Build grounded prompt and call Groq
+    prompt = _build_prompt(user_state, series_name, characters, episodes, {})
     print(f"🤖 Calling Groq (prompt: {len(prompt)} chars)...")
 
     client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
     
     models = [
-        "llama-3.1-8b-instant",       # Use 8b first to handle massive 25k char transcripts within TPM limits
         "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
         "qwen/qwen3.6-27b",
         "openai/gpt-oss-120b"
     ]
