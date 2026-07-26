@@ -386,6 +386,8 @@ Actions available: extend_start, extend_end, drop, trim"""
         from openai import OpenAI
         client = OpenAI(api_key=groq_api_key, base_url="https://api.groq.com/openai/v1")
         models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        raw = None
+        last_err = None
         for model in models:
             try:
                 response = client.chat.completions.create(
@@ -397,9 +399,13 @@ Actions available: extend_start, extend_end, drop, trim"""
                 raw = response.choices[0].message.content.strip()
                 break
             except Exception as e:
+                last_err = e
                 if "rate_limit" in str(e).lower() or "429" in str(e):
                     continue
                 raise e
+        
+        if raw is None:
+            raise RuntimeError(f"All QA models failed or rate limited. Last error: {last_err}")
         raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
         raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
         data = json.loads(raw)

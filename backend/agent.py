@@ -146,6 +146,8 @@ def plan_recap(
     client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
     
     models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    raw = None
+    last_err = None
     for model in models:
         try:
             response = client.chat.completions.create(
@@ -158,9 +160,13 @@ def plan_recap(
             print(f"   Groq response: {len(raw)} chars (using {model})")
             break
         except Exception as e:
+            last_err = e
             if "rate_limit" in str(e).lower() or "429" in str(e):
                 continue
             raise e
+
+    if raw is None:
+        raise RuntimeError(f"All models failed or rate limited. Last error: {last_err}")
 
     # Strip markdown fences
     raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
