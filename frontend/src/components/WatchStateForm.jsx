@@ -50,9 +50,9 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
     return (
       <div>
         {[1,2,3].map(i => (
-          <div key={i} className="card" style={{ marginBottom: 16 }}>
+          <div key={i} className="netflix-row" style={{ marginBottom: 16 }}>
             <div className="skeleton" style={{ height: 16, width: '30%', marginBottom: 16 }} />
-            <div className="skeleton" style={{ height: 48, width: '100%' }} />
+            <div className="skeleton" style={{ height: 157, width: '100%' }} />
           </div>
         ))}
       </div>
@@ -61,31 +61,20 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
 
   return (
     <div>
-      {/* Series name */}
-      {seriesInfo && (
-        <div style={{ marginBottom: 24, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          Series: <strong style={{ color: 'var(--text)' }}>{seriesInfo.series_name}</strong>
-          {nextEpisode && watched.length > 0 && (
-            <> — watching next: <strong style={{ color: 'var(--accent)' }}>Episode {nextEpisode}</strong></>
-          )}
-        </div>
-      )}
-
       {/* Episode selector */}
-      <div className="card">
-        <div className="card-title">Episodes watched</div>
+      <div className="netflix-row">
+        <div className="netflix-row-title">Episodes Watched</div>
         {episodes.length > 0 ? (
-          <div className="episode-grid">
+          <div className="netflix-slider">
             {episodes.map(ep => (
               <div
                 key={ep.number}
                 className={`episode-tile ${watched.includes(ep.number) ? 'selected' : ''}`}
                 onClick={() => toggleEpisode(ep.number)}
               >
-                <div className="check" />
                 <div className="ep-label">
                   <div className="ep-num">Episode {ep.number}</div>
-                  <div style={{ color: 'var(--text)', fontSize: '0.8rem', marginTop: 1 }}>
+                  <div style={{ color: 'var(--text)', fontSize: '0.9rem', marginTop: 1 }}>
                     {ep.title}
                   </div>
                 </div>
@@ -94,28 +83,15 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
           </div>
         ) : (
           <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-            No episodes found. Run <code style={{ background: 'var(--bg-raised)', padding: '2px 6px', borderRadius: 4 }}>ingest.py</code> first.
-          </div>
-        )}
-
-        {watched.length > 0 && (
-          <div style={{ marginTop: 12, fontSize: '0.78rem', color: 'var(--text-dim)' }}>
-            {watched.length} episode{watched.length > 1 ? 's' : ''} selected
-            {' · '}
-            <span
-              style={{ color: 'var(--accent)', cursor: 'pointer' }}
-              onClick={() => setWatched([])}
-            >
-              Clear all
-            </span>
+            No episodes found.
           </div>
         )}
       </div>
 
       {/* Time since last watch */}
-      <div className="card">
-        <div className="card-title">When did you last watch?</div>
-        <div className="time-options">
+      <div className="netflix-row">
+        <div className="netflix-row-title">Time Since Last Watch</div>
+        <div className="netflix-slider">
           {TIME_OPTIONS.map(opt => (
             <button
               key={opt.value}
@@ -123,18 +99,38 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
               onClick={() => setTimeSince(opt.value)}
             >
               {opt.label}
-              <div style={{ fontSize: '0.68rem', color: 'inherit', opacity: 0.6, marginTop: 2 }}>
-                {opt.sub}
-              </div>
+              <small>{opt.sub}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Character focus */}
+      <div className="netflix-row">
+        <div className="netflix-row-title">Character Focus (Optional)</div>
+        <div className="netflix-slider">
+          <button
+            className={`char-btn ${!focusChar ? 'selected' : ''}`}
+            onClick={() => setFocusChar(null)}
+          >
+            All characters
+          </button>
+          {characters.map(char => (
+            <button
+              key={char}
+              className={`char-btn ${focusChar === char ? 'selected' : ''}`}
+              onClick={() => setFocusChar(char)}
+            >
+              {char}
             </button>
           ))}
         </div>
       </div>
 
       {/* Recap length */}
-      <div className="card">
-        <div className="card-title">Recap length</div>
-        <div className="length-row">
+      <div className="netflix-row">
+        <div className="netflix-row-title">Recap Length</div>
+        <div className="netflix-slider">
           {LENGTH_OPTIONS.map(opt => (
             <button
               key={opt.value}
@@ -148,41 +144,15 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
         </div>
       </div>
 
-      {/* Character focus (optional) */}
-      {characters.length > 0 && (
-        <div className="card">
-          <div className="card-title">Focus character <span style={{ color: 'var(--text-dim)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
-          <div className="character-row">
-            <button
-              className={`char-btn ${focusChar === null ? 'selected' : ''}`}
-              onClick={() => setFocusChar(null)}
-            >
-              All characters
-            </button>
-            {characters.map(char => (
-              <button
-                key={char}
-                className={`char-btn ${focusChar === char ? 'selected' : ''}`}
-                onClick={() => setFocusChar(char)}
-              >
-                {char}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Generate button */}
-      <button
-        className="generate-btn"
-        onClick={handleSubmit}
-        disabled={watched.length === 0 || !nextEpisode || submitting || !seriesInfo}
-      >
-        {submitting
-          ? 'Generating...'
-          : `Generate My Recap → Episode ${nextEpisode || '?'}`
-        }
-      </button>
+      <div style={{ padding: '0 50px', marginTop: 24, paddingBottom: 64 }}>
+        <button
+          className="generate-btn"
+          disabled={watched.length === 0 || submitting}
+          onClick={handleSubmit}
+        >
+          {submitting ? 'Generating...' : '▶ Play Recap'}
+        </button>
+      </div>
     </div>
   )
 }

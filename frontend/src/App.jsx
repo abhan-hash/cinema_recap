@@ -74,36 +74,61 @@ export default function App() {
         <div className="logo">
           CINEMA RECAP
         </div>
+        <div style={{ display: 'flex', gap: 20, fontWeight: 500, fontSize: '0.9rem', color: '#e5e5e5' }}>
+          <span style={{ color: '#fff', fontWeight: 700 }}>Home</span>
+          <span>TV Shows</span>
+          <span>Movies</span>
+          <span>My List</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ width: 32, height: 32, background: 'var(--accent)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+          U
+        </div>
       </header>
 
       <main className="main">
         {screen === 'form' && (
           <>
-            <div className="hero">
-              <h1>Catch up in seconds.</h1>
-              <p>
-                Select your place in the series. We generate a seamless, director's cut recap of exactly what you need to remember. No spoilers.
-              </p>
+            <div className="netflix-hero">
+              <div className="netflix-hero-vignette" />
+              <div className="netflix-hero-content">
+                <div style={{ fontSize: '3rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', marginBottom: 8, textShadow: '0 2px 20px rgba(0,0,0,0.8)' }}>
+                  Breaking Bad
+                </div>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, fontSize: '0.9rem', fontWeight: 600, color: '#a3a3a3' }}>
+                  <span style={{ color: '#46d369' }}>98% Match</span>
+                  <span>2008</span>
+                  <span style={{ border: '1px solid rgba(255,255,255,0.4)', padding: '1px 4px', borderRadius: 2 }}>TV-MA</span>
+                  <span>5 Seasons</span>
+                  <span style={{ border: '1px solid rgba(255,255,255,0.4)', padding: '1px 4px', borderRadius: 2, fontSize: '0.7rem' }}>HD</span>
+                </div>
+                <p style={{ maxWidth: 500, fontSize: '1.2rem', lineHeight: 1.5, textShadow: '0 2px 4px rgba(0,0,0,0.8)', marginBottom: 24, fontWeight: 500 }}>
+                  A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine in order to secure his family's future.
+                </p>
+                {/* Form will inject the play button here */}
+              </div>
             </div>
 
-            {seriesError && (
-              <div className="error-box" style={{ marginBottom: 24 }}>
-                ⚠️ Can't connect to backend: {seriesError}
-                <br /><small>Make sure the FastAPI server is running on port 8000.</small>
-              </div>
-            )}
+            <div className="netflix-rows-container">
+              {seriesError && (
+                <div className="error-box" style={{ marginBottom: 24, margin: '0 50px' }}>
+                  ⚠️ Can't connect to backend: {seriesError}
+                  <br /><small>Make sure the FastAPI server is running on port 8000.</small>
+                </div>
+              )}
 
-            {error && (
-              <div className="error-box" style={{ marginBottom: 24 }}>
-                ❌ {error}
-              </div>
-            )}
+              {error && (
+                <div className="error-box" style={{ marginBottom: 24, margin: '0 50px' }}>
+                  ❌ {error}
+                </div>
+              )}
 
-            <WatchStateForm
-              seriesInfo={seriesInfo}
-              onGenerate={handleGenerate}
-              loading={!seriesInfo && !seriesError}
-            />
+              <WatchStateForm
+                seriesInfo={seriesInfo}
+                onGenerate={handleGenerate}
+                loading={!seriesInfo && !seriesError}
+              />
+            </div>
           </>
         )}
 
