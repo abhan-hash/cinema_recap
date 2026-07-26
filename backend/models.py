@@ -26,7 +26,15 @@ class UserState(BaseModel):
     )
     focus_character: Optional[str] = Field(
         None,
-        description="Optional character they want the recap focused on, e.g. 'the Tramp'"
+        description="Optional character they want the recap focused on, e.g. 'Walter White'"
+    )
+    focus_characters: Optional[list[str]] = Field(
+        None,
+        description="Optional list of multiple characters to merge storylines for, e.g. ['Walter White', 'Jesse Pinkman']"
+    )
+    custom_prompt: Optional[str] = Field(
+        None,
+        description="Custom recap prompt/topic specified by user, e.g. 'Chemistry cooking in RV'"
     )
     recap_length: str = Field(
         "medium",

@@ -76,16 +76,40 @@ def _build_prompt(
     n_beats   = MOMENT_COUNTS.get(user_state.recap_length, 7)
     beat_secs = CLIP_SECONDS.get(user_state.recap_length, 9)
 
-    if user_state.focus_character:
-        focus_line = (
-            f"CRITICAL INSTRUCTION: The user specifically wants to follow {user_state.focus_character}'s storyline. "
-            f"You MUST make {user_state.focus_character} the absolute priority. Focus 100% on their scenes, dialogue, and character arc. "
-            f"Do not include unrelated B-rolls or other plotlines."
+    # Determine character focus and custom directives
+    active_chars = []
+    if user_state.focus_characters:
+        active_chars = user_state.focus_characters
+    elif user_state.focus_character:
+        active_chars = [c.strip() for c in user_state.focus_character.split(',') if c.strip()]
+
+    custom_directive = ""
+    if user_state.custom_prompt:
+        custom_directive = (
+            f"🎯 HIGH-PRIORITY CUSTOM DIRECTIVE: The user explicitly requested: \"{user_state.custom_prompt}\".\n"
+            f"Every single moment in your recap plan MUST directly serve, illustrate, or feature this specific topic/theme.\n\n"
         )
-        showrunner_rules = f"""- NARRATIVE FOCUS: {user_state.focus_character}'s storyline is the absolute priority. Do not include unrelated beats.
-- SEQUENCE: Chronologically build {user_state.focus_character}'s journey — setup → rising stakes → biggest shock/cliffhanger.
-- PACING: Do not waste beats on generic B-roll.
-- TENSION: Prefer moments for {user_state.focus_character} that set up UNRESOLVED tension going into Episode {user_state.next_episode}."""
+
+    if active_chars:
+        chars_str = " & ".join(active_chars)
+        focus_line = (
+            f"{custom_directive}"
+            f"CRITICAL INSTRUCTION: The user specifically wants a recap merging the storylines of {chars_str}.\n"
+            f"You MUST make {chars_str} the absolute priority. Focus on their shared interactions, key individual turning points, "
+            f"and the intersection of their character arcs. Do not include unrelated B-rolls or other plotlines."
+        )
+        showrunner_rules = f"""- NARRATIVE FOCUS: {chars_str}'s combined storylines are the absolute priority. Do not include unrelated beats.
+- SEQUENCE: Chronologically build {chars_str}'s journey — setup → rising stakes → shared conflicts / cliffhangers.
+- PACING: Do not waste beats on generic B-roll unless relevant to {chars_str}.
+- TENSION: Prefer moments for {chars_str} that set up UNRESOLVED tension going into Episode {user_state.next_episode}."""
+    elif user_state.custom_prompt:
+        focus_line = (
+            f"{custom_directive}"
+            f"CRITICAL INSTRUCTION: Focus 100% of the recap beats on the user's topic: \"{user_state.custom_prompt}\"."
+        )
+        showrunner_rules = f"""- NARRATIVE FOCUS: Every beat MUST directly illustrate "{user_state.custom_prompt}".
+- SEQUENCE: Chronologically sequence beats to tell a coherent story around this theme.
+- TENSION: Prefer moments that set up UNRESOLVED tension going into Episode {user_state.next_episode}."""
     else:
         focus_line = "Balance beats across the main story threads."
         showrunner_rules = f"""- NARRATIVE FOCUS: Identify the "A-Plot" and "B-Plot" from the transcripts and weave them chronologically.

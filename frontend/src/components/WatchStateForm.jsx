@@ -13,12 +13,20 @@ const LENGTH_OPTIONS = [
   { value: 'long',   label: '📺 Deep Dive',    sub: 'Every plot thread' },
 ]
 
+const PRESET_PROMPTS = [
+  { label: '🧪 Chemistry & RV Cooks', text: 'Focus on Walter and Jesse cooking meth in the RV' },
+  { label: "🔍 Hank's Investigation", text: "Focus on Hank Schrader's DEA investigation and clues" },
+  { label: '⚡ Walt & Jesse Partnership', text: 'Focus on Walter and Jesse partnership and relationship' },
+  { label: '💥 Bathtub & Acid Disaster', text: 'Focus on the body disposal and hydrofluoric acid disaster' },
+]
+
 export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
-  const [watched, setWatched] = useState([])
-  const [timeSince, setTimeSince] = useState('last_week')
-  const [focusChar, setFocusChar] = useState(null)
-  const [recapLength, setRecapLength] = useState('medium')
-  const [submitting, setSubmitting] = useState(false)
+  const [watched, setWatched]             = useState([])
+  const [timeSince, setTimeSince]         = useState('last_week')
+  const [focusChars, setFocusChars]       = useState([])  // Array for multi-character selection
+  const [customPrompt, setCustomPrompt]   = useState('')
+  const [recapLength, setRecapLength]     = useState('medium')
+  const [submitting, setSubmitting]       = useState(false)
 
   const episodes = seriesInfo?.episodes || []
   const characters = seriesInfo?.characters || []
@@ -33,6 +41,12 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
     )
   }
 
+  const toggleCharacter = (char) => {
+    setFocusChars(prev =>
+      prev.includes(char) ? prev.filter(c => c !== char) : [...prev, char]
+    )
+  }
+
   const handleSubmit = async () => {
     if (watched.length === 0 || !nextEpisode) return
     setSubmitting(true)
@@ -40,7 +54,9 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
       watched_episodes: watched,
       next_episode: nextEpisode,
       time_since_last_watch: timeSince,
-      focus_character: focusChar,
+      focus_character: focusChars.length > 0 ? focusChars.join(', ') : null,
+      focus_characters: focusChars.length > 0 ? focusChars : null,
+      custom_prompt: customPrompt.trim() || null,
       recap_length: recapLength,
     })
     setSubmitting(false)
@@ -105,23 +121,84 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
         </div>
       </div>
 
-      {/* Character focus */}
+      {/* Multi-Character Focus */}
       <div className="netflix-row">
-        <div className="netflix-row-title">Character Focus (Optional)</div>
+        <div className="netflix-row-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Character Focus (Select 1 or more to merge storylines)</span>
+          {focusChars.length > 0 && (
+            <span style={{ fontSize: '0.78rem', color: '#E50914', fontWeight: 700 }}>
+              {focusChars.length} selected ({focusChars.join(' + ')})
+            </span>
+          )}
+        </div>
         <div className="netflix-slider">
           <button
-            className={`char-btn ${!focusChar ? 'selected' : ''}`}
-            onClick={() => setFocusChar(null)}
+            className={`char-btn ${focusChars.length === 0 ? 'selected' : ''}`}
+            onClick={() => setFocusChars([])}
           >
             All characters
           </button>
           {characters.map(char => (
             <button
               key={char}
-              className={`char-btn ${focusChar === char ? 'selected' : ''}`}
-              onClick={() => setFocusChar(char)}
+              className={`char-btn ${focusChars.includes(char) ? 'selected' : ''}`}
+              onClick={() => toggleCharacter(char)}
+              style={focusChars.includes(char) ? { background: '#E50914', borderColor: '#E50914', color: '#fff' } : {}}
             >
-              {char}
+              {focusChars.includes(char) ? `✓ ${char}` : char}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom Recap Prompt / Topic */}
+      <div className="netflix-row" style={{ padding: '0 50px', marginBottom: 24 }}>
+        <div className="netflix-row-title" style={{ padding: 0, marginBottom: 8 }}>
+          ✨ Custom Recap Topic / Directing Prompt (Optional)
+        </div>
+        <div style={{ position: 'relative', marginBottom: 10 }}>
+          <input
+            type="text"
+            value={customPrompt}
+            onChange={e => setCustomPrompt(e.target.value)}
+            placeholder="e.g. Focus on the chemistry cooking scenes in the RV..."
+            style={{
+              width: '100%',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 8,
+              padding: '12px 16px',
+              color: '#fff',
+              fontSize: '0.92rem',
+              outline: 'none',
+              fontFamily: 'inherit',
+              transition: 'border-color 0.2s',
+            }}
+            onFocus={e => e.target.style.borderColor = 'rgba(229,9,20,0.6)'}
+            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
+          />
+        </div>
+
+        {/* Preset Prompt Pills */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {PRESET_PROMPTS.map((p, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setCustomPrompt(p.text)}
+              style={{
+                background: customPrompt === p.text ? 'rgba(229,9,20,0.2)' : 'rgba(255,255,255,0.05)',
+                border: '1px solid ' + (customPrompt === p.text ? '#E50914' : 'rgba(255,255,255,0.1)'),
+                color: customPrompt === p.text ? '#fff' : 'rgba(255,255,255,0.7)',
+                padding: '5px 12px',
+                borderRadius: 99,
+                cursor: 'pointer',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                transition: '0.2s',
+              }}
+            >
+              {p.label}
             </button>
           ))}
         </div>
@@ -134,7 +211,7 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
           {LENGTH_OPTIONS.map(opt => (
             <button
               key={opt.value}
-              className={`length-btn ${recapLength === opt.value ? 'selected' : ''}`}
+              className={`time-btn ${recapLength === opt.value ? 'selected' : ''}`}
               onClick={() => setRecapLength(opt.value)}
             >
               {opt.label}
@@ -150,7 +227,7 @@ export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {
           disabled={watched.length === 0 || submitting}
           onClick={handleSubmit}
         >
-          {submitting ? 'Generating...' : '▶ Play Recap'}
+          {submitting ? 'Generating Custom Recap...' : '▶ Play Recap'}
         </button>
       </div>
     </div>
