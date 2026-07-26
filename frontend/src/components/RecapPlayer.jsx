@@ -121,42 +121,48 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
   const [loading,   setLoading]   = useState(false)
   const [playing,   setPlaying]   = useState(false)
 
-  // Fetch stream URL when active
+  // Fetch stream URL (eagerly for all clips so they preload)
   useEffect(() => {
-    if (!isActive || streamUrl || streamUrlOverride || !clip?.video_id) return
+    if (streamUrl || streamUrlOverride || !clip?.video_id) return
     setLoading(true)
     fetch(`${apiBase}/clip-stream?video_id=${clip.video_id}&start=${clip.start}&end=${clip.end}`)
       .then(r => r.json())
       .then(d => { setStreamUrl(d.stream_url); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [isActive])
+  }, [clip?.video_id, clip?.start, clip?.end, streamUrlOverride])
 
-  // HLS attach + autoplay
+  // HLS attach (runs once when streamUrl is ready, buffers in background)
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return
     const video = videoRef.current
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
 
-    const playVideo = () => {
-      if (isActive) video.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
-    }
-
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = streamUrl
-      video.addEventListener('loadedmetadata', playVideo)
     } else if (Hls.isSupported()) {
       const hls = new Hls({ autoStartLoad: true })
       hls.loadSource(streamUrl)
       hls.attachMedia(video)
-      hls.on(Hls.Events.MANIFEST_PARSED, playVideo)
       hlsRef.current = hls
     }
 
     return () => {
       hlsRef.current?.destroy(); hlsRef.current = null
-      video.removeEventListener('loadedmetadata', playVideo)
     }
-  }, [streamUrl, isActive])
+  }, [streamUrl])
+
+  // Play/Pause based on isActive state (without tearing down Hls)
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !streamUrl) return
+    
+    if (isActive) {
+      video.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
+    } else {
+      video.pause()
+      setPlaying(false)
+    }
+  }, [isActive, streamUrl])
 
   const togglePlay = () => {
     if (!videoRef.current) return
@@ -222,7 +228,8 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
 export default function RecapPlayer({ recap, apiBase, onReset }) {
   const [showIntro,   setShowIntro]   = useState(!!recap.previously_on_audio_url)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [playMode,    setPlayMode]    = useState('interactive')
+  // Default to seamless mode as requested
+  const [playMode,    setPlayMode]    = useState(recap.compiled_stream_url ? 'seamless' : 'interactive')
 
   const segments = recap.segments || []
 
@@ -276,8 +283,9 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
             <div style={{ marginBottom: 12, fontSize: '0.9rem', color: 'var(--accent)', fontWeight: 600 }}>
               Seamless Director's Cut
             </div>
+            {/* isActive is true only when intro is done, triggering playback of the pre-buffered stream */}
             <ClipPlayer
-              clip={{}} apiBase={apiBase} isActive={true}
+              clip={{}} apiBase={apiBase} isActive={!showIntro}
               streamUrlOverride={recap.compiled_stream_url}
             />
           </div>
@@ -300,7 +308,7 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
                   <ClipPlayer
                     clip={seg.clip}
                     apiBase={apiBase}
-                    isActive={i === activeIndex}
+                    isActive={!showIntro && i === activeIndex}
                     onEnded={goNext}
                   />
                 </div>
