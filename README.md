@@ -14,7 +14,7 @@ Every streaming platform gives every viewer the same "Previously on..." recap. R
 - **How long ago** — watched last night vs 6 months ago → different depth
 - **Which character you care about** — recap focused on that arc
 
-An AI planning agent (Claude) decides which 5–8 moments are essential context for *your* specific next episode. VideoDB retrieves the exact clips from the archive using semantic search. AI-generated bridging narration ties the clips together.
+An AI planning agent (Gemini / Groq) decides which 5–8 moments are essential context for *your* specific next episode. VideoDB retrieves the exact clips from the archive using semantic search. AI-generated bridging narration ties the clips together.
 
 
 ## Architecture
@@ -22,11 +22,11 @@ An AI planning agent (Claude) decides which 5–8 moments are essential context 
 ```
 User state (watched eps, time, character)
         ↓
-Layer 2: Claude planning agent → recap brief (list of moments to find)
+Layer 2: Gemini / Groq planning agent → recap brief (list of moments to find)
         ↓
 Layer 3: VideoDB semantic search → exact timestamps + clips
         ↓
-Layer 4: Claude narration scripts + OpenAI TTS audio
+Layer 4: Narration scripts + Edge-TTS / OpenAI audio
         ↓
 Frontend: Sequenced player (narration → clip → narration → clip...)
 ```
@@ -47,8 +47,8 @@ Frontend: Sequenced player (narration → clip → narration → clip...)
 cp .env.example .env
 # Edit .env with your keys:
 # VIDEODB_API_KEY=...
-# ANTHROPIC_API_KEY=...
-# OPENAI_API_KEY=...  (optional, for TTS narration audio)
+# GEMINI_API_KEY=...  (Free at https://aistudio.google.com/apikey)
+# GROQ_API_KEY=...    (Optional fallback, free at https://console.groq.com/keys)
 ```
 
 ### 2. Configure your series
@@ -89,7 +89,7 @@ recapai/
 │   ├── ingest.py        # Layer 0: one-time ingestion
 │   ├── config.py        # VideoDB connection + episode index
 │   ├── models.py        # Pydantic data models
-│   ├── agent.py         # Layer 2: Claude planning agent
+│   ├── agent.py         # Layer 2: Gemini / Groq planning agent
 │   ├── retrieval.py     # Layer 3: VideoDB search + clip extraction
 │   ├── narration.py     # Layer 4: narration scripts + TTS
 │   └── main.py          # FastAPI app
@@ -112,7 +112,7 @@ recapai/
 | Layer | Tech |
 |-------|------|
 | Video archive | VideoDB (spoken word + scene indexes) |
-| Planning agent | Claude Sonnet (Anthropic) |
-| Narration TTS | OpenAI TTS (voice: onyx) |
+| Planning agent | Gemini / Groq (Llama 3) |
+| Narration TTS | Edge-TTS / OpenAI TTS |
 | Backend API | FastAPI (Python) |
 | Frontend | React + Vite |
