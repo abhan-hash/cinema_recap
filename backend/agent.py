@@ -55,13 +55,32 @@ def _fetch_episode_transcripts(
 
 
 def _call_llm(prompt: str, client: OpenAI) -> str:
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=2000,
-    )
-    return response.choices[0].message.content.strip()
+    # Try models in order to bypass specific model TPD rate limits
+    models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+    ]
+    
+    last_err = None
+    for model in models:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=2000,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            last_err = e
+            if "rate_limit_exceeded" in str(e).lower() or "429" in str(e):
+                print(f"   ⚠️  Rate limited on {model}, falling back to next model...")
+                continue
+            raise e
+            
+    raise RuntimeError(f"All models failed or rate limited. Last error: {last_err}")
 
 
 def _run_researcher_agent(transcripts: dict[int, str], series_name: str, client: OpenAI) -> str:
