@@ -284,11 +284,12 @@ async def chat_endpoint(req: ChatRequest):
         raise HTTPException(status_code=503, detail=str(e))
 
     try:
-        reply = answer_question(req, episode_index)
+        res = answer_question(req, episode_index)
+        if isinstance(res, ChatResponse):
+            return res
+        return ChatResponse(reply=str(res))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
-
-    return ChatResponse(reply=reply)
 
 
 @app.get("/search-archive")
