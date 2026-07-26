@@ -120,5 +120,18 @@ class ChatRequest(BaseModel):
     current_clip: Optional[dict[str, Any]] = None   # RetrievedClip fields as dict
     user_state: UserState
 
+class RelevantSceneNav(BaseModel):
+    """Navigational link to a relevant scene in the show."""
+    label: str
+    direction: str          # "previous" | "next"
+    reason: str
+    episode_number: int
+    episode_title: str
+    video_id: str
+    start: float
+    end: float
+
 class ChatResponse(BaseModel):
     reply: str
+    prev_scene: Optional[RelevantSceneNav] = None
+    next_scene: Optional[RelevantSceneNav] = None

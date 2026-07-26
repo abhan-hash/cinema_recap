@@ -1,19 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
 
 /**
- * SceneChatbot — slide-in panel for scene-aware, spoiler-free Q&A
+ * SceneChatbot — slide-in panel for scene-aware Q&A & Interactive Scene Navigation
  * Props:
- *   apiBase      — backend URL
- *   userState    — full user state (watched episodes, next episode, etc.)
- *   currentClip  — the clip currently on screen (can be null)
- *   isOpen       — controlled open state
- *   onClose      — callback to close
+ *   apiBase             — backend URL
+ *   userState           — full user state (watched episodes, next episode, etc.)
+ *   currentClip         — the clip currently on screen (can be null)
+ *   isOpen              — controlled open state
+ *   onClose             — callback to close
+ *   onNavigateToScene   — callback when user clicks a scene navigation card
  */
-export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, onClose }) {
+export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, onClose, onNavigateToScene }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "Hey! I'm your recap companion 🎬 I know everything about the episodes you've watched. Ask me anything — I won't spoil what's ahead!",
+      content: "Hey! I'm your recap companion 🎬 Ask me anything about this scene — I'll explain it and find relevant scenes for you to jump to!",
     },
   ])
   const [input, setInput]   = useState('')
@@ -47,14 +48,22 @@ export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: messages.filter(m => m.role !== 'system'),
+          history: messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content })),
           current_clip: currentClip || null,
           user_state: userState,
         }),
       })
       const data = await res.json()
-      const reply = res.ok ? data.reply : (data.detail || 'Sorry, something went wrong.')
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+      if (res.ok) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.reply,
+          prev_scene: data.prev_scene,
+          next_scene: data.next_scene,
+        }])
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.detail || 'Sorry, something went wrong.' }])
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error — is the backend running?' }])
     } finally {
@@ -84,7 +93,7 @@ export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, 
       <div style={{
         position: 'fixed',
         top: 0, right: 0, bottom: 0,
-        width: 'min(420px, 100vw)',
+        width: 'min(440px, 100vw)',
         zIndex: 1999,
         display: 'flex',
         flexDirection: 'column',
@@ -109,9 +118,9 @@ export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, 
                 background: 'linear-gradient(135deg, #E50914, #ff6b35)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '1.1rem',
-              }}>🎬</div>
+              }}>🧭</div>
               <div>
-                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#fff' }}>Recap Companion</div>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#fff' }}>Scene Navigator & Q&A</div>
                 <div style={{ fontSize: '0.72rem', color: '#46d369', fontWeight: 600 }}>● Spoiler-free mode</div>
               </div>
             </div>
@@ -152,18 +161,19 @@ export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, 
         {/* Messages */}
         <div style={{
           flex: 1, overflowY: 'auto', padding: '16px 20px',
-          display: 'flex', flexDirection: 'column', gap: 12,
+          display: 'flex', flexDirection: 'column', gap: 14,
         }}>
           {messages.map((msg, i) => (
             <div
               key={i}
               style={{
                 display: 'flex',
-                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                flexDirection: 'column',
+                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
               }}
             >
               <div style={{
-                maxWidth: '85%',
+                maxWidth: '90%',
                 padding: '10px 14px',
                 borderRadius: msg.role === 'user'
                   ? '16px 16px 4px 16px'
@@ -181,6 +191,75 @@ export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, 
               }}>
                 {msg.content}
               </div>
+
+              {/* Interactive Scene Navigation Cards */}
+              {(msg.prev_scene || msg.next_scene) && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, width: '90%' }}>
+                  {msg.prev_scene && (
+                    <button
+                      onClick={() => onNavigateToScene?.(msg.prev_scene)}
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.18)',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        color: '#fff',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        transition: '0.2s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(229,9,20,0.25)'; e.currentTarget.style.borderColor = 'rgba(229,9,20,0.5)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)' }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>⏪</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 800, color: '#fca5a5', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Jump to Previous Setup Scene
+                        </div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff', marginTop: 2 }}>
+                          {msg.prev_scene.label}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                          {msg.prev_scene.reason}
+                        </div>
+                      </div>
+                    </button>
+                  )}
+
+                  {msg.next_scene && (
+                    <button
+                      onClick={() => onNavigateToScene?.(msg.next_scene)}
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.18)',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        color: '#fff',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        transition: '0.2s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(70,211,105,0.2)'; e.currentTarget.style.borderColor = 'rgba(70,211,105,0.5)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)' }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>⏩</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 800, color: '#46d369', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Jump to Next Related Scene
+                        </div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff', marginTop: 2 }}>
+                          {msg.next_scene.label}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                          {msg.next_scene.reason}
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
 
@@ -216,7 +295,7 @@ export default function SceneChatbot({ apiBase, userState, currentClip, isOpen, 
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask about this scene…"
+            placeholder="Why is Walter angry here?..."
             rows={1}
             style={{
               flex: 1,

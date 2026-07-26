@@ -344,13 +344,14 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
         />
       )}
 
-      {/* Scene chatbot panel */}
+      {/* Scene chatbot panel & Navigator */}
       <SceneChatbot
         apiBase={apiBase}
         userState={recap.user_state}
         currentClip={activeClip}
         isOpen={chatOpen}
         onClose={() => setChatOpen(false)}
+        onNavigateToScene={(scene) => setEpisodeClip(scene)}
       />
 
       {/* Floating Chat Button */}
