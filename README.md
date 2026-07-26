@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+# RecapAI
 
 > "Previously on... but built for you specifically."
 
@@ -116,8 +116,3 @@ recapai/
 | Narration TTS | OpenAI TTS (voice: onyx) |
 | Backend API | FastAPI (Python) |
 | Frontend | React + Vite |
-=======
-# cinema_
-=======
-# cinema_recap
->>>>>>> 7254362ccc76b7eea93e33f8214824b6f373a7f4
