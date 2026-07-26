@@ -1,10 +1,10 @@
 """
-agent.py — Layer 2: Recap Planning Agent
+agent.py — Layer 2: Multi-Agent Recap Planning
 =========================================
-Grounded approach: fetches the real transcript from VideoDB first,
-then asks the LLM to pick moments FROM the actual content.
-This eliminates hallucination — every beat the LLM picks is anchored
-to something that was actually said in the episodes.
+We split planning into three distinct AI Agents to prevent context collapse:
+1. The Researcher: Maps out the actual plot threads from the transcript.
+2. The Showrunner: Designs the narrative arc (A-Plot/B-Plot) based on user prefs.
+3. The Editor: Finds the exact verbatim dialogue anchors in the transcript.
 """
 
 import json
@@ -33,10 +33,6 @@ def _fetch_episode_transcripts(
     episodes: dict,
     max_chars_per_ep: int = 8000,
 ) -> dict[int, str]:
-    """
-    Fetch the actual transcript text for each watched episode from VideoDB.
-    Returns {episode_number: transcript_text}
-    """
     coll = get_collection()
     transcripts = {}
     for ep_num in watched_episode_numbers:
@@ -48,7 +44,6 @@ def _fetch_episode_transcripts(
         try:
             video = coll.get_video(vid_id)
             text  = video.get_transcript_text() or ""
-            # Truncate per episode to manage prompt size
             if len(text) > max_chars_per_ep:
                 text = text[:max_chars_per_ep] + "\n[transcript continues...]"
             transcripts[ep_num] = text
@@ -59,60 +54,89 @@ def _fetch_episode_transcripts(
     return transcripts
 
 
-def _build_prompt(
-    user_state: UserState,
-    series_name: str,
-    characters: list[str],
-    episodes: dict,
-    transcripts: dict[int, str],
-) -> str:
-    n_beats   = MOMENT_COUNTS.get(user_state.recap_length, 7)
-    beat_secs = CLIP_SECONDS.get(user_state.recap_length, 9)
-
-    focus_line = (
-        f"Weight the beats toward {user_state.focus_character}'s arc."
-        if user_state.focus_character
-        else "Balance beats across the main story threads."
+def _call_llm(prompt: str, client: OpenAI) -> str:
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=2000,
     )
+    return response.choices[0].message.content.strip()
 
-    # Build the grounded transcript block
+
+def _run_researcher_agent(transcripts: dict[int, str], series_name: str, client: OpenAI) -> str:
+    print("🤖 [Agent 1] Researcher is analyzing transcripts...")
     transcript_block = ""
     for ep_num in sorted(transcripts.keys()):
-        ep_title = episodes[str(ep_num)]["title"]
-        transcript_block += f"\n\n--- EPISODE {ep_num}: {ep_title} TRANSCRIPT ---\n"
-        transcript_block += transcripts[ep_num]
+        transcript_block += f"\n\n--- EPISODE {ep_num} TRANSCRIPT ---\n{transcripts[ep_num]}"
 
-    return f"""You are an expert TV editor cutting a 'Previously on {series_name}...' cold-open.
-
-IMPORTANT: You are working ONLY from the transcripts below. Do NOT invent scenes or dialogue from your training data.
-Every moment you pick MUST be directly supported by text you can see in the transcripts.
+    prompt = f"""You are the Lead Researcher for a TV recap of {series_name}.
+Read the following transcripts and extract a structured "Plot Map".
+Ignore formatting and timestamps. Focus entirely on WHAT HAPPENED.
 
 {transcript_block}
 
 ---
+TASK:
+Output a clean, concise summary of:
+1. The A-Plot (The main driving storyline)
+2. The B-Plot (The secondary character storylines)
+3. Unresolved Tensions (What is left hanging?)
+"""
+    return _call_llm(prompt, client)
 
-TASK: The viewer watched Episodes {sorted(user_state.watched_episodes)} and is about to watch Episode {user_state.next_episode}.
-{focus_line}
-Known characters: {', '.join(characters)}
 
-Pick EXACTLY {n_beats} beats for the recap. Think like a MASTER SHOWRUNNER:
-- MULTI-THREAD NARRATIVE: Identify the "A-Plot" and "B-Plot" from the transcripts. Weave beats from both threads chronologically so the recap has true narrative structure.
-- PACING & RHYTHM (B-ROLL): Inject at least 1-2 "B-roll" action shots (e.g. scenic transitions, silent reactions, driving) between heavy dialogue scenes to let the recap breathe. For these, `exact_dialogue` MUST be null.
-- Sequence beats to BUILD — setup → rising stakes → biggest shock/cliffhanger.
-- Prefer moments that set up UNRESOLVED tension going into Episode {user_state.next_episode}.
+def _run_showrunner_agent(plot_map: str, user_state: UserState, characters: list[str], client: OpenAI) -> str:
+    print("🤖 [Agent 2] Showrunner is designing the narrative arc...")
+    n_beats = MOMENT_COUNTS.get(user_state.recap_length, 7)
+    focus = f"Focus heavily on {user_state.focus_character}." if user_state.focus_character else "Balance the A-Plot and B-Plot."
 
-For EACH beat, provide:
-- `moment_description`: What is happening visually (keep to 1 sentence)
-- `exact_dialogue`: The EXACT line of dialogue from the transcript above that anchors this moment. MUST be verbatim. If it's a B-Roll/action beat, set to null.
-- `episode`: episode number (integer)
-- `clip_duration_seconds`: seconds this beat needs ({beat_secs-2}–{beat_secs+4}s range).
-- `mood`: one of: tense | dramatic | calm | action | sad
-- `importance`: one of: critical | important | context | b-roll
+    prompt = f"""You are the Showrunner editing a 'Previously on...' recap.
+Here is the Plot Map of what the viewer has seen so far:
+{plot_map}
 
-Return ONLY valid JSON — no markdown, no code fences:
+TASK:
+The viewer watched Episodes {sorted(user_state.watched_episodes)} and is about to watch Episode {user_state.next_episode}.
+{focus}
+
+Design a "Recap Blueprint" of EXACTLY {n_beats} story beats. 
+- Sequence them chronologically to build tension (Setup -> Rising Action -> Cliffhanger).
+- Inject 1-2 "B-Roll" (silent visual action shots) to help the pacing breathe.
+
+Output a numbered list of the {n_beats} beats. For each beat, describe WHAT HAPPENS and WHY it matters.
+Do NOT worry about exact dialogue or JSON formatting yet. Just write the creative blueprint.
+"""
+    return _call_llm(prompt, client)
+
+
+def _run_editor_agent(blueprint: str, transcripts: dict[int, str], beat_secs: int, client: OpenAI) -> str:
+    print("🤖 [Agent 3] Editor is finding exact transcript anchors...")
+    transcript_block = ""
+    for ep_num in sorted(transcripts.keys()):
+        transcript_block += f"\n\n--- EPISODE {ep_num} TRANSCRIPT ---\n{transcripts[ep_num]}"
+
+    prompt = f"""You are the Video Editor. You must execute this Recap Blueprint by finding EXACT dialogue anchors in the transcripts.
+
+BLUEPRINT:
+{blueprint}
+
+TRANSCRIPTS:
+{transcript_block}
+
+TASK:
+For EACH beat in the blueprint, find the PERFECT exact, verbatim line of dialogue from the transcripts to anchor it.
+If it is a B-Roll action beat, set exact_dialogue to null.
+
+Return ONLY valid JSON:
 {{"moments": [
-  {{"moment_description": "...", "exact_dialogue": "...", "episode": 1, "clip_duration_seconds": {beat_secs}, "mood": "tense", "importance": "critical", "characters_involved": ["Walter White"]}}
-]}}"""
+  {{"moment_description": "...", "exact_dialogue": "exact verbatim text from transcript", "episode": 1, "clip_duration_seconds": {beat_secs}, "mood": "tense", "importance": "critical", "characters_involved": ["Walt"]}}
+]}}
+"""
+    raw = _call_llm(prompt, client)
+    # Strip markdown
+    raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
+    raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
+    return raw
 
 
 def plan_recap(
@@ -122,52 +146,36 @@ def plan_recap(
     episodes: dict,
 ) -> list[MomentBrief]:
     """
-    Grounded recap planning:
-    1. Load actual transcripts from VideoDB
-    2. Feed them to Groq so it picks moments from REAL content
-    3. Return MomentBriefs with exact dialogue anchors
+    Multi-Agent grounded recap planning:
+    1. Researcher -> Plot Map
+    2. Showrunner -> Blueprint
+    3. Editor -> Exact JSON Matches
     """
     if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY not set — get one free at https://console.groq.com/keys")
+        raise ValueError("GROQ_API_KEY not set")
 
-    # Step 1: Load real transcripts
     print("📄 Loading episode transcripts from VideoDB...")
-    transcripts = _fetch_episode_transcripts(
-        watched_episode_numbers=user_state.watched_episodes,
-        episodes=episodes,
-    )
+    transcripts = _fetch_episode_transcripts(user_state.watched_episodes, episodes)
     if not transcripts:
         raise ValueError("Could not load any episode transcripts from VideoDB")
 
-    # Step 2: Build grounded prompt and call Groq
-    prompt = _build_prompt(user_state, series_name, characters, episodes, transcripts)
-    print(f"🤖 Calling Groq (prompt: {len(prompt)} chars)...")
-
     client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",   # Use the bigger model for grounded selection
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=2000,
-    )
-    raw = response.choices[0].message.content.strip()
-    print(f"   Groq response: {len(raw)} chars")
 
-    # Strip markdown fences
-    raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
-    raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
+    # The Multi-Agent Pipeline
+    plot_map = _run_researcher_agent(transcripts, series_name, client)
+    blueprint = _run_showrunner_agent(plot_map, user_state, characters, client)
+    beat_secs = CLIP_SECONDS.get(user_state.recap_length, 9)
+    editor_json = _run_editor_agent(blueprint, transcripts, beat_secs, client)
 
     try:
-        data = json.loads(raw)
+        data = json.loads(editor_json)
     except json.JSONDecodeError:
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        match = re.search(r'\{.*\}', editor_json, re.DOTALL)
         if match:
             data = json.loads(match.group())
         else:
-            raise ValueError(f"Groq returned non-JSON: {raw[:300]}")
+            raise ValueError(f"Editor Agent returned non-JSON: {editor_json[:300]}")
 
-    # Step 3: Parse moments
-    beat_secs = CLIP_SECONDS.get(user_state.recap_length, 9)
     moments = []
     for m in data.get("moments", []):
         importance = m.get("importance", "important")
@@ -185,10 +193,9 @@ def plan_recap(
         )
         moments.append(brief)
 
-    # Sort by episode then narrative position
     moments.sort(key=lambda m: m.episode)
 
-    print(f"\n   ✅ {len(moments)} grounded beats selected:")
+    print(f"\n   ✅ {len(moments)} Multi-Agent beats selected:")
     for i, m in enumerate(moments):
         diag = f'  → "{m.exact_dialogue[:50]}"' if m.exact_dialogue else "  (action beat)"
         print(f"   {i+1}. [Ep {m.episode}] [{m.mood}] {m.moment_description[:55]}...")
