@@ -1,134 +1,173 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Hls from 'hls.js'
 
-// Free, royalty-free mood tracks from a public CDN
-const MOOD_TRACKS = {
-  tense:    'https://cdn.pixabay.com/download/audio/2022/08/02/audio_884fe92c21.mp3',
-  dramatic: 'https://cdn.pixabay.com/download/audio/2023/03/09/audio_ac64a10e15.mp3',
-  calm:     'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3',
-  action:   'https://cdn.pixabay.com/download/audio/2022/10/30/audio_182bc9afc4.mp3',
-  sad:      'https://cdn.pixabay.com/download/audio/2022/11/22/audio_0c3db6c1a4.mp3',
-}
-
-function MoodAudio({ mood, isActive }) {
+// ─────────────────────────────────────────────────────────────
+// PreviouslyOnIntro
+// Full-screen intro card that plays the character-voiced audio,
+// then dismisses itself. Handles browser autoplay gracefully.
+// ─────────────────────────────────────────────────────────────
+function PreviouslyOnIntro({ audioUrl, apiBase, seriesName, onDone }) {
   const audioRef = useRef(null)
+  const [playing, setPlaying] = useState(false)
+  const [done,    setDone]    = useState(false)
 
+  const tryPlay = () => {
+    if (!audioRef.current || playing) return
+    audioRef.current.volume = 1.0
+    audioRef.current.play()
+      .then(() => setPlaying(true))
+      .catch(() => {
+        // Autoplay blocked — skip intro silently
+        handleDone()
+      })
+  }
+
+  const handleDone = () => {
+    setDone(true)
+    setTimeout(onDone, 400) // short fade before showing recap
+  }
+
+  // Try autoplay after a tiny delay (gives browser time after user click)
   useEffect(() => {
-    if (!audioRef.current) return
-    const audio = audioRef.current
-    audio.volume = 0.18
-    audio.loop = true
+    if (!audioUrl) { onDone(); return }
+    const t = setTimeout(tryPlay, 300)
+    return () => clearTimeout(t)
+  }, [])
 
-    if (isActive) {
-      audio.play().catch(() => {})
-    } else {
-      // Fade out
-      const fade = setInterval(() => {
-        if (audio.volume > 0.02) {
-          audio.volume = Math.max(0, audio.volume - 0.02)
-        } else {
-          audio.pause()
-          audio.volume = 0.18
-          clearInterval(fade)
-        }
-      }, 80)
-      return () => clearInterval(fade)
-    }
-  }, [isActive])
-
-  const src = MOOD_TRACKS[mood] || MOOD_TRACKS.tense
-  return <audio ref={audioRef} src={src} preload="auto" style={{ display: 'none' }} />
-}
-
-function NarrationAudio({ audioUrl, onEnded }) {
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (audioUrl && ref.current) {
-      ref.current.play().catch(() => {})
-    }
-  }, [audioUrl])
-
-  if (!audioUrl) return null
+  if (done) return null
 
   return (
-    <audio ref={ref} src={audioUrl} onEnded={onEnded} style={{ display: 'none' }} />
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: '#000',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 24,
+      animation: done ? 'fadeOut 0.4s ease forwards' : 'fadeIn 0.6s ease',
+    }}>
+      <style>{`
+        @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes fadeOut { from { opacity: 1 } to { opacity: 0 } }
+        @keyframes pulse   { 0%,100% { opacity: 0.6 } 50% { opacity: 1 } }
+      `}</style>
+
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={`${apiBase}${audioUrl}`}
+          onEnded={handleDone}
+          style={{ display: 'none' }}
+        />
+      )}
+
+      <div style={{
+        fontSize: '0.75rem', letterSpacing: '0.2em', textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.4)', fontWeight: 600,
+      }}>
+        {playing ? 'Now playing' : 'Preparing recap...'}
+      </div>
+
+      <div style={{
+        fontSize: 'clamp(1.4rem, 4vw, 2.2rem)',
+        fontWeight: 700,
+        color: '#fff',
+        textAlign: 'center',
+        letterSpacing: '-0.02em',
+        animation: 'pulse 2s ease-in-out infinite',
+      }}>
+        Previously on<br />{seriesName}…
+      </div>
+
+      {playing && (
+        <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 24 }}>
+          {[0,1,2,3,4].map(i => (
+            <div key={i} style={{
+              width: 3, background: 'var(--accent, #e05c2a)', borderRadius: 2,
+              animation: `pulse ${0.6 + i * 0.1}s ease-in-out infinite`,
+              height: 8 + i * 3,
+            }} />
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={handleDone}
+        style={{
+          marginTop: 8,
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.2)',
+          color: 'rgba(255,255,255,0.4)',
+          fontSize: '0.75rem',
+          padding: '6px 18px',
+          borderRadius: 99,
+          cursor: 'pointer',
+          letterSpacing: '0.05em',
+        }}
+      >
+        Skip
+      </button>
+    </div>
   )
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// ClipPlayer — HLS video player, no narration overlay
+// ─────────────────────────────────────────────────────────────
 function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
   const videoRef = useRef(null)
-  const hlsRef = useRef(null)
+  const hlsRef   = useRef(null)
   const [streamUrl, setStreamUrl] = useState(streamUrlOverride || null)
-  const [loading, setLoading] = useState(false)
-  const [playing, setPlaying] = useState(false)
+  const [loading,   setLoading]   = useState(false)
+  const [playing,   setPlaying]   = useState(false)
 
-  // Fetch stream URL when this clip becomes active
+  // Fetch stream URL when active
   useEffect(() => {
-    if (!isActive || streamUrl || streamUrlOverride) return
+    if (!isActive || streamUrl || streamUrlOverride || !clip?.video_id) return
     setLoading(true)
     fetch(`${apiBase}/clip-stream?video_id=${clip.video_id}&start=${clip.start}&end=${clip.end}`)
       .then(r => r.json())
-      .then(d => {
-        setStreamUrl(d.stream_url)
-        setLoading(false)
-      })
+      .then(d => { setStreamUrl(d.stream_url); setLoading(false) })
       .catch(() => setLoading(false))
   }, [isActive])
 
-  // Attach HLS / play logic
+  // HLS attach + autoplay
   useEffect(() => {
-    if (!streamUrl || !videoRef.current) return;
-    const video = videoRef.current;
-
-    // cleanup previous hls
-    if (hlsRef.current) {
-      hlsRef.current.destroy()
-      hlsRef.current = null
-    }
+    if (!streamUrl || !videoRef.current) return
+    const video = videoRef.current
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
 
     const playVideo = () => {
-      if (isActive) {
-        video.play().then(() => setPlaying(true)).catch((e) => {
-          console.error("Autoplay blocked:", e);
-          setPlaying(false);
-        });
-      }
-    };
+      if (isActive) video.play().then(() => setPlaying(true)).catch(() => setPlaying(false))
+    }
 
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari native HLS
-      video.src = streamUrl;
-      video.addEventListener('loadedmetadata', playVideo);
+      video.src = streamUrl
+      video.addEventListener('loadedmetadata', playVideo)
     } else if (Hls.isSupported()) {
-      // Hls.js fallback for Chrome/Firefox
-      const hls = new Hls({ autoStartLoad: true });
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, playVideo);
-      hlsRef.current = hls;
+      const hls = new Hls({ autoStartLoad: true })
+      hls.loadSource(streamUrl)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, playVideo)
+      hlsRef.current = hls
     }
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      video.removeEventListener('loadedmetadata', playVideo);
+      hlsRef.current?.destroy(); hlsRef.current = null
+      video.removeEventListener('loadedmetadata', playVideo)
     }
-  }, [streamUrl, isActive]);
+  }, [streamUrl, isActive])
 
   const togglePlay = () => {
     if (!videoRef.current) return
     if (videoRef.current.paused) {
       videoRef.current.play().then(() => setPlaying(true)).catch(() => {})
     } else {
-      videoRef.current.pause()
-      setPlaying(false)
+      videoRef.current.pause(); setPlaying(false)
     }
   }
 
-  const scorePercent = Math.round((clip.search_score || 0.5) * 100)
+  const scorePercent = Math.round((clip?.search_score || 0.5) * 100)
 
   return (
     <div>
@@ -138,7 +177,7 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
             ref={videoRef}
             controls
             playsInline
-            onEnded={() => { setPlaying(false); onEnded && onEnded() }}
+            onEnded={() => { setPlaying(false); onEnded?.() }}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
           />
@@ -146,7 +185,7 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
           <div style={{
             background: '#000', aspectRatio: '16/9',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text-dim)', fontSize: '0.85rem'
+            color: 'var(--text-dim)', fontSize: '0.85rem',
           }}>
             {loading ? 'Loading clip...' : isActive ? 'Fetching stream...' : 'Ready'}
           </div>
@@ -162,7 +201,7 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
         )}
       </div>
 
-      {clip && clip.episode_number && (
+      {clip?.episode_number && (
         <div className="video-meta">
           <span className="video-ep-tag">
             Ep {clip.episode_number} · {clip.episode_title}
@@ -180,208 +219,169 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
   )
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// RecapPlayer — main component
+// ─────────────────────────────────────────────────────────────
 export default function RecapPlayer({ recap, apiBase, onReset }) {
+  const [showIntro,   setShowIntro]   = useState(!!recap.previously_on_audio_url)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [audioPhase, setAudioPhase] = useState('narration') // 'narration' | 'video'
-  const [playMode, setPlayMode] = useState('interactive') // 'interactive' | 'seamless'
+  const [playMode,    setPlayMode]    = useState('interactive')
 
   const segments = recap.segments || []
-  const activeSegment = segments[activeIndex]
 
-  const goNext = () => {
-    if (activeIndex < segments.length - 1) {
-      setActiveIndex(i => i + 1)
-      setAudioPhase('narration')
-    }
-  }
+  const goNext = () => { if (activeIndex < segments.length - 1) setActiveIndex(i => i + 1) }
+  const goPrev = () => { if (activeIndex > 0) setActiveIndex(i => i - 1) }
 
-  const goPrev = () => {
-    if (activeIndex > 0) {
-      setActiveIndex(i => i - 1)
-      setAudioPhase('narration')
-    }
-  }
-
-  const handleNarrationEnd = () => {
-    setAudioPhase('video')
-  }
-
-  // Closing narration text (after last clip)
-  const closing = segments.length > 0
-    ? segments[segments.length - 1].narration_text
-    : null
+  const seriesName = recap.user_state
+    ? `Episode ${recap.user_state.watched_episodes.slice(-1)[0]}`
+    : 'the show'
 
   return (
-    <div>
-      {/* Header */}
-      <div className="recap-header">
-        <div className="recap-badge">Recap Ready</div>
-        <div className="recap-title">
-          Previously on Episode {recap.user_state.watched_episodes.slice(-1)[0]}…
-        </div>
-        <div className="recap-meta">
-          {segments.length} moments · {Math.round(recap.total_duration_seconds)}s total
-          {recap.user_state.focus_character && ` · Focused on ${recap.user_state.focus_character}`}
-        </div>
-        
-        {recap.compiled_stream_url && (
-          <button 
-            className="ctrl-btn primary" 
-            style={{ marginTop: 16, background: playMode === 'seamless' ? 'var(--bg-raised)' : 'var(--accent)', color: 'white', width: '100%' }}
-            onClick={() => setPlayMode(playMode === 'interactive' ? 'seamless' : 'interactive')}
-          >
-            {playMode === 'interactive' ? '🎬 Watch as Seamless Movie' : '⬅ Back to Interactive Mode'}
-          </button>
-        )}
-      </div>
+    <>
+      {/* Previously on... intro */}
+      {showIntro && (
+        <PreviouslyOnIntro
+          audioUrl={recap.previously_on_audio_url}
+          apiBase={apiBase}
+          seriesName="Breaking Bad"
+          onDone={() => setShowIntro(false)}
+        />
+      )}
 
-      {playMode === 'seamless' ? (
-        <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-card)', borderRadius: 12 }}>
-          <div style={{ marginBottom: 12, fontSize: '0.9rem', color: 'var(--accent)', fontWeight: 600 }}>Seamless Director's Cut</div>
-          <ClipPlayer 
-            clip={{}} 
-            apiBase={apiBase} 
-            isActive={true} 
-            streamUrlOverride={recap.compiled_stream_url} 
-          />
-        </div>
-      ) : (
-        <>
-          {/* Status */}
-          {recap.status === 'partial' && (
-            <div className="error-box" style={{ marginBottom: 16, background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)', color: '#fde68a' }}>
-              ⚠️ {recap.message}
-            </div>
+      {/* Main recap UI */}
+      <div style={{ opacity: showIntro ? 0 : 1, transition: 'opacity 0.4s ease' }}>
+        {/* Header */}
+        <div className="recap-header">
+          <div className="recap-badge">Recap Ready</div>
+          <div className="recap-title">Previously on {seriesName}…</div>
+          <div className="recap-meta">
+            {segments.length} moments · {Math.round(recap.total_duration_seconds)}s total
+            {recap.user_state?.focus_character && ` · Focused on ${recap.user_state.focus_character}`}
+          </div>
+
+          {recap.compiled_stream_url && (
+            <button
+              className="ctrl-btn primary"
+              style={{
+                marginTop: 16, width: '100%',
+                background: playMode === 'seamless' ? 'var(--bg-raised)' : 'var(--accent)',
+                color: 'white',
+              }}
+              onClick={() => setPlayMode(playMode === 'interactive' ? 'seamless' : 'interactive')}
+            >
+              {playMode === 'interactive' ? '🎬 Watch as Seamless Cut' : '⬅ Back to Interactive Mode'}
+            </button>
           )}
+        </div>
 
-      {/* Segment list */}
-      <div>
-        {segments.map((seg, i) => (
-          <div
-            key={i}
-            className={`segment ${i === activeIndex ? 'active-segment' : ''}`}
-            onClick={() => { setActiveIndex(i); setAudioPhase('narration') }}
-          >
-            {/* Narration */}
-            <div className="narration-bar">
-              <div className="narration-icon">🎙️</div>
-              <div className="narration-text">
-                "{seg.narration_text}"
-              </div>
-              {seg.clip.mood && (
-                <span style={{
-                  fontSize: '0.68rem', padding: '2px 8px', borderRadius: 99,
-                  background: {tense:'rgba(239,68,68,0.15)',dramatic:'rgba(168,85,247,0.15)',calm:'rgba(59,130,246,0.15)',action:'rgba(249,115,22,0.15)',sad:'rgba(100,116,139,0.15)'}[seg.clip.mood] || 'rgba(255,255,255,0.05)',
-                  color: {tense:'#fca5a5',dramatic:'#d8b4fe',calm:'#93c5fd',action:'#fdba74',sad:'#94a3b8'}[seg.clip.mood] || '#aaa',
-                  fontWeight: 600, marginLeft: 8, flexShrink: 0, alignSelf: 'center'
-                }}>
-                  {{tense:'⚡ Tense',dramatic:'🎭 Dramatic',calm:'🌊 Calm',action:'💥 Action',sad:'💔 Sad'}[seg.clip.mood] || seg.clip.mood}
-                </span>
-              )}
+        {playMode === 'seamless' ? (
+          <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-card)', borderRadius: 12 }}>
+            <div style={{ marginBottom: 12, fontSize: '0.9rem', color: 'var(--accent)', fontWeight: 600 }}>
+              Seamless Director's Cut
             </div>
-
-            {/* Narration audio (active segment only) */}
-            {i === activeIndex && audioPhase === 'narration' && seg.narration_audio_url && (
-              <NarrationAudio
-                audioUrl={`${apiBase}${seg.narration_audio_url}`}
-                onEnded={handleNarrationEnd}
-              />
-            )}
-
-            {/* Mood background music */}
-            <MoodAudio
-              mood={seg.clip.mood || 'tense'}
-              isActive={i === activeIndex}
-            />
-
-            {/* Video clip */}
             <ClipPlayer
-              clip={seg.clip}
-              apiBase={apiBase}
-              isActive={i === activeIndex && (audioPhase === 'video' || !seg.narration_audio_url)}
-              onEnded={goNext}
+              clip={{}} apiBase={apiBase} isActive={true}
+              streamUrlOverride={recap.compiled_stream_url}
             />
           </div>
-        ))}
-      </div>
-
-      {/* Navigation */}
-      <div className="controls-bar" style={{ marginTop: 24 }}>
-        <button className="ctrl-btn" onClick={goPrev} disabled={activeIndex === 0}>
-          ← Prev
-        </button>
-        <button
-          className="ctrl-btn"
-          style={{ flex: 2, fontSize: '0.8rem', color: 'var(--text-dim)' }}
-          disabled
-        >
-          {activeIndex + 1} / {segments.length}
-        </button>
-        <button className="ctrl-btn" onClick={goNext} disabled={activeIndex === segments.length - 1}>
-          Next →
-        </button>
-      </div>
-
-      {/* Bottom actions */}
-      <div className="controls-bar" style={{ marginTop: 12 }}>
-        <button className="ctrl-btn" onClick={onReset}>
-          ← Change settings
-        </button>
-        <button className="ctrl-btn primary" onClick={() => {
-          setActiveIndex(0)
-          setAudioPhase('narration')
-        }}>
-          ↺ Replay from start
-        </button>
-      </div>
-
-      {/* Evidence panel — shows judges that VideoDB is doing real retrieval */}
-      <div className="card" style={{ marginTop: 32 }}>
-        <div className="card-title">VideoDB retrieval evidence</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {segments.map((seg, i) => (
-            <div
-              key={i}
-              style={{
-                display: 'flex', gap: 12, alignItems: 'flex-start',
-                padding: '10px 12px',
-                background: i === activeIndex ? 'rgba(224,92,42,0.06)' : 'var(--bg-raised)',
-                borderRadius: 8,
-                border: i === activeIndex ? '1px solid rgba(224,92,42,0.3)' : '1px solid var(--border)',
-                cursor: 'pointer',
-              }}
-              onClick={() => { setActiveIndex(i); setAudioPhase('narration') }}
-            >
-              <div style={{
-                width: 24, height: 24, borderRadius: 6,
-                background: 'var(--bg-card)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.72rem', fontWeight: 700,
-                color: i === activeIndex ? 'var(--accent)' : 'var(--text-dim)',
-                flexShrink: 0,
-              }}>
-                {i + 1}
+        ) : (
+          <>
+            {recap.status === 'partial' && (
+              <div className="error-box" style={{ marginBottom: 16, background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)', color: '#fde68a' }}>
+                ⚠️ {recap.message}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text)', marginBottom: 2, fontWeight: 500 }}>
-                  Ep {seg.clip.episode_number}: {seg.clip.episode_title}
-                  <span style={{ color: 'var(--text-dim)', marginLeft: 8 }}>
-                    {seg.clip.start.toFixed(0)}s–{seg.clip.end.toFixed(0)}s
-                  </span>
+            )}
+
+            <div>
+              {segments.map((seg, i) => (
+                <div
+                  key={i}
+                  className={`segment ${i === activeIndex ? 'active-segment' : ''}`}
+                  onClick={() => setActiveIndex(i)}
+                >
+                  <ClipPlayer
+                    clip={seg.clip}
+                    apiBase={apiBase}
+                    isActive={i === activeIndex}
+                    onEnded={goNext}
+                  />
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', lineHeight: 1.4, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                  {seg.clip.description || seg.clip.moment_description}
-                </div>
-              </div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--accent)', fontWeight: 600, flexShrink: 0 }}>
-                {Math.round((seg.clip.search_score || 0.5) * 100)}%
+              ))}
+            </div>
+
+            <div className="controls-bar" style={{ marginTop: 24 }}>
+              <button className="ctrl-btn" onClick={goPrev} disabled={activeIndex === 0}>← Prev</button>
+              <button className="ctrl-btn" style={{ flex: 2, fontSize: '0.8rem', color: 'var(--text-dim)' }} disabled>
+                {activeIndex + 1} / {segments.length}
+              </button>
+              <button className="ctrl-btn" onClick={goNext} disabled={activeIndex === segments.length - 1}>Next →</button>
+            </div>
+
+            <div className="controls-bar" style={{ marginTop: 12 }}>
+              <button className="ctrl-btn" onClick={onReset}>← Change settings</button>
+              <button className="ctrl-btn primary" onClick={() => setActiveIndex(0)}>↺ Replay</button>
+            </div>
+
+            {/* Evidence panel */}
+            <div className="card" style={{ marginTop: 32 }}>
+              <div className="card-title">VideoDB retrieval evidence</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {segments.map((seg, i) => {
+                  const MOOD_COLORS = {
+                    tense:'#fca5a5', dramatic:'#d8b4fe', calm:'#93c5fd', action:'#fdba74', sad:'#94a3b8'
+                  }
+                  const MOOD_BG = {
+                    tense:'rgba(239,68,68,0.12)', dramatic:'rgba(168,85,247,0.12)',
+                    calm:'rgba(59,130,246,0.12)', action:'rgba(249,115,22,0.12)', sad:'rgba(100,116,139,0.12)'
+                  }
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex', gap: 12, alignItems: 'flex-start',
+                        padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                        background: i === activeIndex ? 'rgba(224,92,42,0.06)' : 'var(--bg-raised)',
+                        border: i === activeIndex ? '1px solid rgba(224,92,42,0.3)' : '1px solid var(--border)',
+                      }}
+                      onClick={() => setActiveIndex(i)}
+                    >
+                      <div style={{
+                        width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                        background: 'var(--bg-card)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.72rem', fontWeight: 700,
+                        color: i === activeIndex ? 'var(--accent)' : 'var(--text-dim)',
+                      }}>{i + 1}</div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text)', marginBottom: 4, fontWeight: 500 }}>
+                          Ep {seg.clip.episode_number}: {seg.clip.episode_title}
+                          <span style={{
+                            marginLeft: 8, fontSize: '0.65rem', padding: '1px 7px', borderRadius: 99,
+                            background: MOOD_BG[seg.clip.mood] || 'rgba(255,255,255,0.05)',
+                            color: MOOD_COLORS[seg.clip.mood] || '#aaa', fontWeight: 600,
+                          }}>
+                            {seg.clip.mood}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                          {seg.clip.moment_description?.slice(0, 90)}…
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', flexShrink: 0, textAlign: 'right' }}>
+                        <div>{(seg.clip.start || 0).toFixed(0)}s – {(seg.clip.end || 0).toFixed(0)}s</div>
+                        <div>{(seg.clip.end - seg.clip.start).toFixed(1)}s · {Math.round((seg.clip.search_score || 0) * 100)}% match</div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </div>
-      </>
-      )}
-    </div>
+    </>
   )
 }

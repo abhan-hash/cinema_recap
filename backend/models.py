@@ -71,11 +71,9 @@ class RetrievedClip(BaseModel):
 # ─────────────────────────────────────────────
 
 class NarratedSegment(BaseModel):
-    """One segment of the final recap: optional narration audio + video clip."""
-    narration_text: str
-    narration_audio_url: Optional[str]  # TTS audio URL for local playback
-    narration_audio_id: Optional[str] = None # VideoDB Asset ID for the TTS audio
-    narration_audio_length: float = 0.0
+    """One recap segment: a contextual caption + the video clip."""
+    narration_text: str          # Short caption shown as hover overlay
+    narration_audio_url: Optional[str] = None  # Always None now — no per-clip audio
     clip: RetrievedClip
 
 
@@ -85,7 +83,8 @@ class RecapResponse(BaseModel):
     total_duration_seconds: float
     segments: list[NarratedSegment]
     compiled_stream_url: Optional[str]  # Set if Timeline compilation succeeds
-    status: str  # "success" | "partial" (if some clips weren't found)
+    previously_on_audio_url: Optional[str] = None  # Character-voiced "Previously on..." intro
+    status: str  # "success" | "partial"
     message: str
 
 
