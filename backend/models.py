@@ -2,7 +2,7 @@
 models.py — Pydantic request/response models
 """
 
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, Field
 
 
@@ -64,6 +64,7 @@ class RetrievedClip(BaseModel):
     search_score: float
     moment_description: str
     mood: str = "tense"   # carries mood through to the frontend
+    dialogue_text: Optional[str] = None  # Verbatim spoken dialogue subtitle
 
 
 # ─────────────────────────────────────────────
@@ -101,3 +102,23 @@ class SeriesInfo(BaseModel):
     series_name: str
     characters: list[str]
     episodes: list[EpisodeInfo]
+
+
+# ─────────────────────────────────────────────
+# Chatbot: Scene-aware, spoiler-safe Q&A
+# ─────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    """A single message in a chat conversation."""
+    role: str    # "user" | "assistant"
+    content: str
+
+class ChatRequest(BaseModel):
+    """Chat request sent from the frontend."""
+    message: str
+    history: list[ChatMessage] = []
+    current_clip: Optional[dict[str, Any]] = None   # RetrievedClip fields as dict
+    user_state: UserState
+
+class ChatResponse(BaseModel):
+    reply: str

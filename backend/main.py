@@ -17,11 +17,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from models import UserState, RecapResponse, SeriesInfo, EpisodeInfo
+from models import UserState, RecapResponse, SeriesInfo, EpisodeInfo, ChatRequest, ChatResponse
 from config import load_episode_index, get_collection, get_videodb_conn, GROQ_API_KEY
 from agent import plan_recap
-from retrieval import retrieve_clips, get_clip_stream_url, qa_and_refine_clips
+from retrieval import retrieve_clips, get_clip_stream_url, qa_and_refine_clips, search_archive
 from narration import get_voice_for_character
+from chat import answer_question
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -177,11 +178,12 @@ async def generate_recap(user_state: UserState):
     if not clips:
         raise HTTPException(status_code=500, detail="All clips were dropped by QA pass")
 
-    # ── Build segments (no captions — just clips with empty narration_text) ──
+    # ── Build segments with verbatim dialogue subtitles ──
     segments = []
     from models import NarratedSegment
     for clip in clips:
-        segments.append(NarratedSegment(narration_text="", clip=clip))
+        caption_text = clip.dialogue_text or clip.moment_description
+        segments.append(NarratedSegment(narration_text=caption_text, clip=clip))
 
     # ── Total duration ──
     total_duration = sum(seg.clip.end - seg.clip.start for seg in segments)
@@ -189,10 +191,11 @@ async def generate_recap(user_state: UserState):
     # ── Layer 5: "Previously on..." intro audio ──
     previously_on_url = _generate_previously_on_audio(series_name, user_state.focus_character)
 
-    # ── Layer 6: Compile Seamless Stream (video only) ──
+    # ── Layer 6: Compile Seamless Stream with Background Music ──
     compiled_stream_url = None
     try:
-        print("🎬 Compiling seamless video timeline...")
+        print("🎬 Compiling seamless video timeline with Breaking Bad theme audio...")
+        from videodb.editor import AudioAsset
         timeline = Timeline(get_videodb_conn())
         video_track = Track()
 
@@ -205,6 +208,24 @@ async def generate_recap(user_state: UserState):
             current_time += duration
 
         timeline.add_track(video_track)
+
+        # Add low-volume Breaking Bad theme audio track (looped to cover total duration)
+        theme_audio_id = "a-z-019f9f3d-bee9-73f0-be29-5752f70ad0c3"
+        AUDIO_LEN = 18.0
+        try:
+            audio_track = Track()
+            t = 0.0
+            while t < current_time:
+                dur = min(AUDIO_LEN, current_time - t)
+                audio_asset = AudioAsset(id=theme_audio_id, start=0, volume=0.15)
+                audio_clip  = Clip(asset=audio_asset, duration=dur)
+                audio_track.add_clip(start=t, clip=audio_clip)
+                t += dur
+            timeline.add_track(audio_track)
+            print(f"   🎵 Added Breaking Bad theme audio track (volume: 0.15, duration: {current_time:.1f}s)")
+        except Exception as ae:
+            print(f"   ⚠️  Could not add theme audio track: {ae}")
+
         compiled_stream_url = timeline.generate_stream()
         print(f"🎬 Seamless stream ready: {compiled_stream_url}")
     except Exception as e:
@@ -248,3 +269,58 @@ def serve_audio(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(str(file_path), media_type="audio/mpeg")
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(req: ChatRequest):
+    """
+    Scene-aware chatbot.
+    Answers questions about the current recap scene using real episode transcripts.
+    Enforces a strict spoiler guardrail — never reveals future episode events.
+    """
+    try:
+        episode_index = load_episode_index()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    try:
+        reply = answer_question(req, episode_index)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
+
+    return ChatResponse(reply=reply)
+
+
+@app.get("/search-archive")
+def search_archive_endpoint(query: str, index_type: str = "all", episode: int | None = None):
+    """
+    Multimodal Scene & Spoken Word Search.
+    Searches VideoDB indexes across all episodes or a specific episode.
+    """
+    try:
+        episode_index = load_episode_index()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    try:
+        results = search_archive(query=query, index_type=index_type, episode_index=episode_index, episode_number=episode)
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Archive search failed: {e}")
+
+
+@app.get("/episode-stream")
+def episode_stream(video_id: str, seek: float = 0.0):
+    """
+    Returns a streamable URL for the full episode, plus the seek timestamp.
+    Used by the frontend 'Watch in Original Episode' feature.
+    """
+    try:
+        coll = get_collection()
+        video = coll.get_video(video_id)
+        stream_url = video.generate_stream()
+        return {"stream_url": stream_url, "seek": seek}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+

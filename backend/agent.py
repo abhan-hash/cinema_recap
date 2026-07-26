@@ -11,7 +11,7 @@ import json
 import re
 from openai import OpenAI
 from models import UserState, MomentBrief
-from config import GROQ_API_KEY, get_collection
+from config import GROQ_API_KEY, GEMINI_API_KEY, get_collection
 
 # How many beats per recap style
 MOMENT_COUNTS = {
@@ -28,10 +28,17 @@ CLIP_SECONDS = {
 }
 
 
+# Total character budget across all episodes to stay within token limits.
+# Gemini Flash: 1M token context — very generous. Groq fallback: ~10k tokens.
+# At ~4 chars/token: 200k chars ≈ 50k tokens — well within Gemini's free tier.
+TOTAL_TRANSCRIPT_BUDGET = 200_000
+GROQ_TRANSCRIPT_BUDGET  = 10_000  # chars total when falling back to Groq
+
+
 def _fetch_episode_transcripts(
     watched_episode_numbers: list[int],
     episodes: dict,
-    max_chars_per_ep: int = 4000,
+    max_chars_per_ep: int = 25000,
 ) -> dict[int, str]:
     """
     Fetch the actual transcript text for each watched episode from VideoDB.
@@ -69,11 +76,22 @@ def _build_prompt(
     n_beats   = MOMENT_COUNTS.get(user_state.recap_length, 7)
     beat_secs = CLIP_SECONDS.get(user_state.recap_length, 9)
 
-    focus_line = (
-        f"Weight the beats toward {user_state.focus_character}'s arc."
-        if user_state.focus_character
-        else "Balance beats across the main story threads."
-    )
+    if user_state.focus_character:
+        focus_line = (
+            f"CRITICAL INSTRUCTION: The user specifically wants to follow {user_state.focus_character}'s storyline. "
+            f"You MUST make {user_state.focus_character} the absolute priority. Focus 100% on their scenes, dialogue, and character arc. "
+            f"Do not include unrelated B-rolls or other plotlines."
+        )
+        showrunner_rules = f"""- NARRATIVE FOCUS: {user_state.focus_character}'s storyline is the absolute priority. Do not include unrelated beats.
+- SEQUENCE: Chronologically build {user_state.focus_character}'s journey — setup → rising stakes → biggest shock/cliffhanger.
+- PACING: Do not waste beats on generic B-roll.
+- TENSION: Prefer moments for {user_state.focus_character} that set up UNRESOLVED tension going into Episode {user_state.next_episode}."""
+    else:
+        focus_line = "Balance beats across the main story threads."
+        showrunner_rules = f"""- NARRATIVE FOCUS: Identify the "A-Plot" and "B-Plot" from the transcripts and weave them chronologically.
+- PACING & RHYTHM (B-ROLL): Inject at least 1-2 "B-roll" action shots (e.g. scenic transitions, silent reactions, driving) between heavy dialogue scenes to let the recap breathe. For these, `exact_dialogue` MUST be null.
+- Sequence beats to BUILD — setup → rising stakes → biggest shock/cliffhanger.
+- Prefer moments that set up UNRESOLVED tension going into Episode {user_state.next_episode}."""
 
     # Build the grounded transcript block
     transcript_block = ""
@@ -96,10 +114,7 @@ TASK: The viewer watched Episodes {sorted(user_state.watched_episodes)} and is a
 Known characters: {', '.join(characters)}
 
 Pick EXACTLY {n_beats} beats for the recap. Think like a MASTER SHOWRUNNER:
-- MULTI-THREAD NARRATIVE: Identify the "A-Plot" and "B-Plot" from the transcripts. Weave beats from both threads chronologically so the recap has true narrative structure.
-- PACING & RHYTHM (B-ROLL): Inject at least 1-2 "B-roll" action shots (e.g. scenic transitions, silent reactions, driving) between heavy dialogue scenes to let the recap breathe. For these, `exact_dialogue` MUST be null.
-- Sequence beats to BUILD — setup → rising stakes → biggest shock/cliffhanger.
-- Prefer moments that set up UNRESOLVED tension going into Episode {user_state.next_episode}.
+{showrunner_rules}
 
 For EACH beat, provide:
 - `moment_description`: What is happening visually (keep to 1 sentence)
@@ -109,7 +124,7 @@ For EACH beat, provide:
 - `mood`: one of: tense | dramatic | calm | action | sad
 - `importance`: one of: critical | important | context | b-roll
 
-Return ONLY valid JSON — no markdown, no code fences:
+Return ONLY valid JSON — no markdown, no code fences. VERY IMPORTANT: You must properly escape any double quotes inside string values (e.g., use \\" for inner quotes):
 {{"moments": [
   {{"moment_description": "...", "exact_dialogue": "...", "episode": 1, "clip_duration_seconds": {beat_secs}, "mood": "tense", "importance": "critical", "characters_involved": ["Walter White"]}}
 ]}}"""
@@ -143,41 +158,73 @@ def plan_recap(
     prompt = _build_prompt(user_state, series_name, characters, episodes, transcripts)
     print(f"🤖 Calling Groq (prompt: {len(prompt)} chars)...")
 
-    client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
-    
-    models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    # Build provider list — Gemini first (1M token context, generous free tier),
+    # fall back to Groq if Gemini key not set or fails.
+    providers = []
+    if GEMINI_API_KEY:
+        gemini_client = OpenAI(
+            api_key=GEMINI_API_KEY,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        for gm in ["gemini-3.1-flash-lite", "gemini-2.0-flash"]:
+            providers.append({
+                "name": gm,
+                "client": gemini_client,
+                "model": gm,
+                "max_tokens": 2048,
+            })
+    if GROQ_API_KEY:
+        for m in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+            providers.append({
+                "name": m,
+                "client": OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1"),
+                "model": m,
+                "max_tokens": 800,
+            })
+
+    if not providers:
+        raise ValueError("No API keys set — add GEMINI_API_KEY or GROQ_API_KEY to .env")
+
     raw = None
     last_err = None
-    for model in models:
+    for p in providers:
         try:
-            response = client.chat.completions.create(
-                model=model,
+            print(f"   🤖 Trying {p['name']}...")
+            # Shrink transcript budget when falling back to Groq
+            if "llama" in p["name"] and len(prompt) > GROQ_TRANSCRIPT_BUDGET:
+                print(f"   ⚠️  Prompt too large for {p['name']} ({len(prompt)} chars) — skipping")
+                continue
+            response = p["client"].chat.completions.create(
+                model=p["model"],
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=800,
+                max_tokens=p["max_tokens"],
+                response_format={"type": "json_object"},
             )
             raw = response.choices[0].message.content.strip()
-            print(f"   Groq response: {len(raw)} chars (using {model})")
+            print(f"   ✅ Response: {len(raw)} chars (via {p['name']})")
             break
         except Exception as e:
             last_err = e
-            if "rate_limit" in str(e).lower() or "429" in str(e):
+            err_str = str(e).lower()
+            if any(code in err_str for code in ["rate_limit", "429", "413", "quota"]):
+                print(f"   ⚠️  {p['name']} rate limited — trying next provider")
                 continue
             raise e
 
     if raw is None:
-        raise RuntimeError(f"All models failed or rate limited. Last error: {last_err}")
+        raise RuntimeError(f"All providers failed. Last error: {last_err}")
 
     # Strip markdown fences
     raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
     raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
 
     try:
-        data = json.loads(raw)
+        data = json.loads(raw, strict=False)
     except json.JSONDecodeError:
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if match:
-            data = json.loads(match.group())
+            data = json.loads(match.group(), strict=False)
         else:
             raise ValueError(f"Groq returned non-JSON: {raw[:300]}")
 

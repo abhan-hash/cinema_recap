@@ -213,6 +213,14 @@ def retrieve_clips(
               f"score={best_score:.3f}  "
               f"text='{best_match['text'][:60]}'")
 
+        # Collect actual spoken dialogue sentences for this clip timeframe
+        sentences = transcript_map.get(best_video_id, [])
+        clip_dialogue = [
+            s['text'] for s in sentences
+            if s['end'] >= clip_start and s['start'] <= clip_end
+        ]
+        dialogue_subtitle = " ".join(clip_dialogue).strip() if clip_dialogue else best_match['text']
+
         clips.append(RetrievedClip(
             video_id=best_video_id,
             episode_number=ep_info["number"],
@@ -223,6 +231,7 @@ def retrieve_clips(
             search_score=min(best_score, 1.0),
             moment_description=moment.moment_description,
             mood=moment.mood,
+            dialogue_text=dialogue_subtitle,
         ))
 
     # Sort by episode then timestamp for narrative order
@@ -452,4 +461,90 @@ Actions available: extend_start, extend_end, drop, trim"""
     result = [c for i, c in enumerate(final_clips) if i not in drop_indices]
     print(f"   ✅ QA complete: {len(result)} clips after review (dropped {len(drop_indices)})\n")
     return result
+
+
+# ─────────────────────────────────────────────
+# Multimodal Archive Search
+# ─────────────────────────────────────────────
+
+def search_archive(
+    query: str,
+    index_type: str,  # "scene" | "spoken_word" | "all"
+    episode_index: dict,
+    episode_number: int | None = None,
+) -> list[dict]:
+    """
+    Search the entire ingested series for matching clips using VideoDB indexes.
+    """
+    coll = get_collection()
+    episodes = episode_index.get("episodes", {})
+
+    target_vids = []
+    if episode_number and str(episode_number) in episodes:
+        target_vids.append((episode_number, episodes[str(episode_number)]))
+    else:
+        for ep_key, ep_data in sorted(episodes.items(), key=lambda x: int(x[0])):
+            target_vids.append((int(ep_key), ep_data))
+
+    results = []
+
+    video_indexes = []
+    if index_type in ("scene", "all"):
+        video_indexes.append(IndexType.scene)
+    if index_type in ("spoken_word", "all"):
+        video_indexes.append(IndexType.spoken_word)
+
+    for ep_num, ep_data in target_vids:
+        vid_id = ep_data["video_id"]
+        ep_title = ep_data["title"]
+        try:
+            video = coll.get_video(vid_id)
+            for idx in video_indexes:
+                try:
+                    res = video.search(query=query, index_type=idx)
+                    shots = res.get_shots() if hasattr(res, 'get_shots') else getattr(res, 'shots', [])
+                    for shot in shots[:5]:
+                        score = float(getattr(shot, 'search_score', 0.5))
+                        start = float(shot.start)
+                        end   = float(shot.end)
+                        if end - start < 6.0:
+                            end = start + 6.0
+                        text = str(getattr(shot, 'text', ''))
+                        results.append({
+                            "video_id": vid_id,
+                            "episode_number": ep_num,
+                            "episode_title": ep_title,
+                            "start": round(start, 2),
+                            "end": round(end, 2),
+                            "text": text or f"Scene match in {ep_title}",
+                            "score": round(score, 2),
+                            "type": "scene" if idx == IndexType.scene else "dialogue",
+                        })
+                except Exception as ex:
+                    print(f"   ⚠️ Search error for {vid_id} on {idx}: {ex}")
+        except Exception as e:
+            print(f"   ⚠️ Could not load video {vid_id}: {e}")
+
+    # Fallback fuzzy transcript search
+    if len(results) < 3 and index_type in ("spoken_word", "all"):
+        for ep_num, ep_data in target_vids:
+            vid_id = ep_data["video_id"]
+            ep_title = ep_data["title"]
+            sentences = _get_video_transcript_sentences(vid_id)
+            for s in _search_transcript(sentences, query, top_n=3):
+                if s['score'] > 0.15:
+                    results.append({
+                        "video_id": vid_id,
+                        "episode_number": ep_num,
+                        "episode_title": ep_title,
+                        "start": round(s['start'], 2),
+                        "end": round(s['end'], 2),
+                        "text": s['text'],
+                        "score": round(s['score'], 2),
+                        "type": "dialogue",
+                    })
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:12]
+
 
