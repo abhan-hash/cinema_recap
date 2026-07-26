@@ -26,7 +26,7 @@ Layer 2: Gemini / Groq planning agent → recap brief (list of moments to find)
         ↓
 Layer 3: VideoDB semantic search → exact timestamps + clips
         ↓
-Layer 4: Narration scripts + Edge-TTS / OpenAI audio
+Layer 4: Narration captions + Edge-TTS audio
         ↓
 Frontend: Sequenced player (narration → clip → narration → clip...)
 ```
@@ -113,6 +113,6 @@ recapai/
 |-------|------|
 | Video archive | VideoDB (spoken word + scene indexes) |
 | Planning agent | Gemini / Groq (Llama 3) |
-| Narration TTS | Edge-TTS / OpenAI TTS |
+| Narration TTS | Edge-TTS (Microsoft Neural Voices) |
 | Backend API | FastAPI (Python) |
 | Frontend | React + Vite |
