@@ -95,21 +95,19 @@ TASK: The viewer watched Episodes {sorted(user_state.watched_episodes)} and is a
 {focus_line}
 Known characters: {', '.join(characters)}
 
-Pick EXACTLY {n_beats} beats for the recap. Think like a TRAILER EDITOR:
-- Sequence beats to BUILD — setup → rising stakes → biggest shock/cliffhanger
-- Prefer SHORT, emotionally punchy lines over long exposition
-- Prefer moments that set up UNRESOLVED tension going into Episode {user_state.next_episode}
+Pick EXACTLY {n_beats} beats for the recap. Think like a MASTER SHOWRUNNER:
+- MULTI-THREAD NARRATIVE: Identify the "A-Plot" and "B-Plot" from the transcripts. Weave beats from both threads chronologically so the recap has true narrative structure.
+- PACING & RHYTHM (B-ROLL): Inject at least 1-2 "B-roll" action shots (e.g. scenic transitions, silent reactions, driving) between heavy dialogue scenes to let the recap breathe. For these, `exact_dialogue` MUST be null.
+- Sequence beats to BUILD — setup → rising stakes → biggest shock/cliffhanger.
+- Prefer moments that set up UNRESOLVED tension going into Episode {user_state.next_episode}.
 
 For EACH beat, provide:
 - `moment_description`: What is happening visually (keep to 1 sentence)
-- `exact_dialogue`: The EXACT line of dialogue from the transcript above that anchors this moment.
-  This MUST be verbatim text you can see in the transcript. Do NOT paraphrase.
-  If it's a pure action beat with no dialogue, set to null.
+- `exact_dialogue`: The EXACT line of dialogue from the transcript above that anchors this moment. MUST be verbatim. If it's a B-Roll/action beat, set to null.
 - `episode`: episode number (integer)
 - `clip_duration_seconds`: seconds this beat needs ({beat_secs-2}–{beat_secs+4}s range).
-  Short punchy action = {beat_secs-2}s. A key line that needs to land = {beat_secs+4}s.
 - `mood`: one of: tense | dramatic | calm | action | sad
-- `importance`: one of: critical | important | context
+- `importance`: one of: critical | important | context | b-roll
 
 Return ONLY valid JSON — no markdown, no code fences:
 {{"moments": [
