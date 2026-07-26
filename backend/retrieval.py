@@ -396,12 +396,14 @@ Actions available: extend_start, extend_end, drop, trim"""
         raw = None
         for model in models:
             try:
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.0,
-                    max_tokens=1000,
-                )
+                kwargs = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0,
+                    "max_tokens": 1000,
+                    "response_format": {"type": "json_object"}
+                }
+                response = client.chat.completions.create(**kwargs)
                 raw = response.choices[0].message.content.strip()
                 # Strip <think> tags if present
                 raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()

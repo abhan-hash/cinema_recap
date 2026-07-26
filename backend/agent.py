@@ -54,7 +54,7 @@ def _fetch_episode_transcripts(
     return transcripts
 
 
-def _call_llm(prompt: str, client: OpenAI) -> str:
+def _call_llm(prompt: str, client: OpenAI, json_mode: bool = False) -> str:
     # Try models in order to bypass specific model TPD rate limits
     models = [
         "llama-3.3-70b-versatile",
@@ -66,12 +66,17 @@ def _call_llm(prompt: str, client: OpenAI) -> str:
     last_err = None
     for model in models:
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=1500,
-            )
+            kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2,
+                "max_tokens": 1500,
+            }
+            if json_mode:
+                # Tell model to use JSON mode
+                kwargs["response_format"] = {"type": "json_object"}
+                
+            response = client.chat.completions.create(**kwargs)
             raw = response.choices[0].message.content.strip()
             # Strip <think> tags if present
             raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
@@ -157,7 +162,7 @@ Return ONLY valid JSON:
   {{"moment_description": "...", "exact_dialogue": "exact verbatim text from transcript", "episode": 1, "clip_duration_seconds": {beat_secs}, "mood": "tense", "importance": "critical", "characters_involved": ["Walt"]}}
 ]}}
 """
-    raw = _call_llm(prompt, client)
+    raw = _call_llm(prompt, client, json_mode=True)
     # Strip markdown
     raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
     raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE).strip()
