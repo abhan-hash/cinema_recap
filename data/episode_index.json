@@ -1,18 +1,29 @@
 {
-  "series_name": "Chaplin Shorts",
+  "series_name": "Breaking Bad",
   "collection_id": "c-ac63bcea-2f81-462e-ab60-380de77343f6",
   "characters": [
-    "Charlie",
-    "The Tramp",
-    "The Lion",
-    "The Boxer",
-    "The Referee"
+    "Walter White",
+    "Jesse Pinkman",
+    "Skyler White",
+    "Hank Schrader",
+    "Marie Schrader",
+    "Walter Jr."
   ],
   "episodes": {
     "1": {
-      "video_id": "m-z-019f99ca-66c8-7612-b792-373fc2e7ca6b",
-      "title": "The Lion's Cage",
+      "video_id": "m-z-019f9b16-fc09-7451-be0b-c9322c50838b",
+      "title": "Pilot",
       "number": 1
+    },
+    "2": {
+      "video_id": "m-z-019f9b19-8783-7140-a066-4dbe393438bf",
+      "title": "Cat's in the Bag...",
+      "number": 2
+    },
+    "3": {
+      "video_id": "m-z-019f9b1b-b6a0-7630-a1a2-b19d2eccd854",
+      "title": "And the Bag's in the River",
+      "number": 3
     }
   }
 }

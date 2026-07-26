@@ -22,6 +22,10 @@ from agent import plan_recap
 from retrieval import retrieve_clips, get_clip_stream_url
 from narration import generate_narration_scripts, build_narrated_segments
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+from videodb.editor import Timeline, VideoAsset, AudioAsset, Track, Clip
+
 # ─────────────────────────────────────────────
 # App setup
 # ─────────────────────────────────────────────
@@ -165,11 +169,46 @@ async def generate_recap(user_state: UserState):
     print(f"\n✅ Recap ready: {len(segments)} segments, {total_duration:.0f}s total")
     print(f"{'='*60}\n")
 
+    # ── Layer 5: Compile Seamless Stream ──
+    try:
+        print("🎬 Compiling Timeline with TTS overlays...")
+        timeline = Timeline(get_videodb_conn())
+        video_track = Track()
+        audio_track = Track()
+        
+        current_time = 0.0
+        for seg in segments:
+            # 1. Video Clip
+            video_asset = VideoAsset(id=seg.clip.video_id, start=seg.clip.start)
+            duration = seg.clip.end - seg.clip.start
+            video_clip = Clip(asset=video_asset, duration=duration)
+            video_track.add_clip(start=current_time, clip=video_clip)
+            
+            # 2. Audio Clip (Narration)
+            if seg.narration_audio_id:
+                audio_asset = AudioAsset(id=seg.narration_audio_id)
+                # The audio can play over the video. We ensure duration doesn't exceed video (or let it).
+                # To be safe, we give it the exact TTS length. 
+                # VideoDB allows audio to spill over? Actually, standard is to give it its own length.
+                audio_clip = Clip(asset=audio_asset, duration=seg.narration_audio_length)
+                audio_track.add_clip(start=current_time, clip=audio_clip)
+            
+            current_time += duration
+            
+        timeline.add_track(video_track)
+        timeline.add_track(audio_track)
+        
+        compiled_stream_url = timeline.generate_stream()
+        print(f"🎬 Compiled seamless stream: {compiled_stream_url}")
+    except Exception as e:
+        print(f"⚠️ Timeline compilation failed: {e}")
+        compiled_stream_url = None
+
     return RecapResponse(
         user_state=user_state,
         total_duration_seconds=total_duration,
         segments=segments,
-        compiled_stream_url=None,  # Timeline compilation in next step
+        compiled_stream_url=compiled_stream_url,
         status=status,
         message=message,
     )

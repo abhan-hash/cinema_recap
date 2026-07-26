@@ -44,7 +44,9 @@ class MomentBrief(BaseModel):
     episode: int
     importance: str  # "critical" | "important" | "context"
     characters_involved: list[str]
-    clip_duration_seconds: int  # 15 for context, 30 for important, 45 for critical
+    clip_duration_seconds: int  # tight window around the key moment
+    mood: str = "tense"  # "tense" | "dramatic" | "calm" | "action" | "sad"
+    exact_dialogue: Optional[str] = None  # Exact dialogue quote to help VideoDB search find the exact scene
 
 
 # ─────────────────────────────────────────────
@@ -61,6 +63,7 @@ class RetrievedClip(BaseModel):
     description: str       # shot.text from VideoDB
     search_score: float
     moment_description: str
+    mood: str = "tense"   # carries mood through to the frontend
 
 
 # ─────────────────────────────────────────────
@@ -70,7 +73,9 @@ class RetrievedClip(BaseModel):
 class NarratedSegment(BaseModel):
     """One segment of the final recap: optional narration audio + video clip."""
     narration_text: str
-    narration_audio_url: Optional[str]  # TTS audio URL (None if TTS failed)
+    narration_audio_url: Optional[str]  # TTS audio URL for local playback
+    narration_audio_id: Optional[str] = None # VideoDB Asset ID for the TTS audio
+    narration_audio_length: float = 0.0
     clip: RetrievedClip
 
 

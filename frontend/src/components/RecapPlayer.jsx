@@ -1,5 +1,44 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Hls from 'hls.js'
+
+// Free, royalty-free mood tracks from a public CDN
+const MOOD_TRACKS = {
+  tense:    'https://cdn.pixabay.com/download/audio/2022/08/02/audio_884fe92c21.mp3',
+  dramatic: 'https://cdn.pixabay.com/download/audio/2023/03/09/audio_ac64a10e15.mp3',
+  calm:     'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3',
+  action:   'https://cdn.pixabay.com/download/audio/2022/10/30/audio_182bc9afc4.mp3',
+  sad:      'https://cdn.pixabay.com/download/audio/2022/11/22/audio_0c3db6c1a4.mp3',
+}
+
+function MoodAudio({ mood, isActive }) {
+  const audioRef = useRef(null)
+
+  useEffect(() => {
+    if (!audioRef.current) return
+    const audio = audioRef.current
+    audio.volume = 0.18
+    audio.loop = true
+
+    if (isActive) {
+      audio.play().catch(() => {})
+    } else {
+      // Fade out
+      const fade = setInterval(() => {
+        if (audio.volume > 0.02) {
+          audio.volume = Math.max(0, audio.volume - 0.02)
+        } else {
+          audio.pause()
+          audio.volume = 0.18
+          clearInterval(fade)
+        }
+      }, 80)
+      return () => clearInterval(fade)
+    }
+  }, [isActive])
+
+  const src = MOOD_TRACKS[mood] || MOOD_TRACKS.tense
+  return <audio ref={audioRef} src={src} preload="auto" style={{ display: 'none' }} />
+}
 
 function NarrationAudio({ audioUrl, onEnded }) {
   const ref = useRef(null)
@@ -17,16 +56,16 @@ function NarrationAudio({ audioUrl, onEnded }) {
   )
 }
 
-function ClipPlayer({ clip, apiBase, isActive, onEnded }) {
+function ClipPlayer({ clip, apiBase, isActive, onEnded, streamUrlOverride }) {
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
-  const [streamUrl, setStreamUrl] = useState(null)
+  const [streamUrl, setStreamUrl] = useState(streamUrlOverride || null)
   const [loading, setLoading] = useState(false)
   const [playing, setPlaying] = useState(false)
 
   // Fetch stream URL when this clip becomes active
   useEffect(() => {
-    if (!isActive || streamUrl) return
+    if (!isActive || streamUrl || streamUrlOverride) return
     setLoading(true)
     fetch(`${apiBase}/clip-stream?video_id=${clip.video_id}&start=${clip.start}&end=${clip.end}`)
       .then(r => r.json())
@@ -123,18 +162,20 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded }) {
         )}
       </div>
 
-      <div className="video-meta">
-        <span className="video-ep-tag">
-          Ep {clip.episode_number} · {clip.episode_title}
-          {' · '}{clip.start.toFixed(0)}s – {clip.end.toFixed(0)}s
-        </span>
-        <span className="video-score">
-          <div className="score-bar">
-            <div className="score-fill" style={{ width: `${scorePercent}%` }} />
-          </div>
-          <span>{scorePercent}% match</span>
-        </span>
-      </div>
+      {clip && clip.episode_number && (
+        <div className="video-meta">
+          <span className="video-ep-tag">
+            Ep {clip.episode_number} · {clip.episode_title}
+            {' · '}{(clip.start || 0).toFixed(0)}s – {(clip.end || 0).toFixed(0)}s
+          </span>
+          <span className="video-score">
+            <div className="score-bar">
+              <div className="score-fill" style={{ width: `${scorePercent}%` }} />
+            </div>
+            <span>{scorePercent}% match</span>
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -142,7 +183,7 @@ function ClipPlayer({ clip, apiBase, isActive, onEnded }) {
 export default function RecapPlayer({ recap, apiBase, onReset }) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [audioPhase, setAudioPhase] = useState('narration') // 'narration' | 'video'
-  const [autoPlay, setAutoPlay] = useState(false)
+  const [playMode, setPlayMode] = useState('interactive') // 'interactive' | 'seamless'
 
   const segments = recap.segments || []
   const activeSegment = segments[activeIndex]
@@ -182,14 +223,36 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
           {segments.length} moments · {Math.round(recap.total_duration_seconds)}s total
           {recap.user_state.focus_character && ` · Focused on ${recap.user_state.focus_character}`}
         </div>
+        
+        {recap.compiled_stream_url && (
+          <button 
+            className="ctrl-btn primary" 
+            style={{ marginTop: 16, background: playMode === 'seamless' ? 'var(--bg-raised)' : 'var(--accent)', color: 'white', width: '100%' }}
+            onClick={() => setPlayMode(playMode === 'interactive' ? 'seamless' : 'interactive')}
+          >
+            {playMode === 'interactive' ? '🎬 Watch as Seamless Movie' : '⬅ Back to Interactive Mode'}
+          </button>
+        )}
       </div>
 
-      {/* Status */}
-      {recap.status === 'partial' && (
-        <div className="error-box" style={{ marginBottom: 16, background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)', color: '#fde68a' }}>
-          ⚠️ {recap.message}
+      {playMode === 'seamless' ? (
+        <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-card)', borderRadius: 12 }}>
+          <div style={{ marginBottom: 12, fontSize: '0.9rem', color: 'var(--accent)', fontWeight: 600 }}>Seamless Director's Cut</div>
+          <ClipPlayer 
+            clip={{}} 
+            apiBase={apiBase} 
+            isActive={true} 
+            streamUrlOverride={recap.compiled_stream_url} 
+          />
         </div>
-      )}
+      ) : (
+        <>
+          {/* Status */}
+          {recap.status === 'partial' && (
+            <div className="error-box" style={{ marginBottom: 16, background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)', color: '#fde68a' }}>
+              ⚠️ {recap.message}
+            </div>
+          )}
 
       {/* Segment list */}
       <div>
@@ -205,6 +268,16 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
               <div className="narration-text">
                 "{seg.narration_text}"
               </div>
+              {seg.clip.mood && (
+                <span style={{
+                  fontSize: '0.68rem', padding: '2px 8px', borderRadius: 99,
+                  background: {tense:'rgba(239,68,68,0.15)',dramatic:'rgba(168,85,247,0.15)',calm:'rgba(59,130,246,0.15)',action:'rgba(249,115,22,0.15)',sad:'rgba(100,116,139,0.15)'}[seg.clip.mood] || 'rgba(255,255,255,0.05)',
+                  color: {tense:'#fca5a5',dramatic:'#d8b4fe',calm:'#93c5fd',action:'#fdba74',sad:'#94a3b8'}[seg.clip.mood] || '#aaa',
+                  fontWeight: 600, marginLeft: 8, flexShrink: 0, alignSelf: 'center'
+                }}>
+                  {{tense:'⚡ Tense',dramatic:'🎭 Dramatic',calm:'🌊 Calm',action:'💥 Action',sad:'💔 Sad'}[seg.clip.mood] || seg.clip.mood}
+                </span>
+              )}
             </div>
 
             {/* Narration audio (active segment only) */}
@@ -214,6 +287,12 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
                 onEnded={handleNarrationEnd}
               />
             )}
+
+            {/* Mood background music */}
+            <MoodAudio
+              mood={seg.clip.mood || 'tense'}
+              isActive={i === activeIndex}
+            />
 
             {/* Video clip */}
             <ClipPlayer
@@ -301,6 +380,8 @@ export default function RecapPlayer({ recap, apiBase, onReset }) {
           ))}
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

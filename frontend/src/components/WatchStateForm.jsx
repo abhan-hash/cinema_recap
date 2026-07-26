@@ -8,9 +8,9 @@ const TIME_OPTIONS = [
 ]
 
 const LENGTH_OPTIONS = [
-  { value: 'short',  label: 'Quick',  sub: '~30 sec' },
-  { value: 'medium', label: 'Standard', sub: '~90 sec' },
-  { value: 'long',   label: 'Full',   sub: '~3 min' },
+  { value: 'short',  label: '⚡ Quick Flash',  sub: 'Key beats only' },
+  { value: 'medium', label: '🎬 Full Recap',   sub: 'Main story threads' },
+  { value: 'long',   label: '📺 Deep Dive',    sub: 'Every plot thread' },
 ]
 
 export default function WatchStateForm({ seriesInfo, onGenerate, loading }) {

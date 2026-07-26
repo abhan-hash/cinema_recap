@@ -1,4 +1,35 @@
+# Environment
 .env
+
+# Frontend build
 node_modules/
 dist/
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Video & audio files (Breaking Bad episodes etc.)
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+*.mp3
+*.wav
+*.m4a
+
+# TTS audio cache
+data/tts_cache/
+
+# Debug / scratch scripts
+backend/debug_retrieval.py
+backend/test_editor.py
+backend/test_timeline.py
+backend/test.mp3
+
+# Data files (episode index is fine to commit, but not the videos)
+data/*.mp4
+data/*.mkv
+data/*.avi

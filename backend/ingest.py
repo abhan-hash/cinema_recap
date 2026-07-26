@@ -30,30 +30,35 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 # CONFIGURE YOUR SERIES HERE
 # ─────────────────────────────────────────────
 
-SERIES_NAME = "Chaplin Shorts"  # Change to your chosen series
+SERIES_NAME = "Breaking Bad"  
 
 # Each episode: number, title, and a URL or local file path.
-# For the hackathon, use public domain content.
-# Good sources:
-#   - archive.org (Charlie Chaplin, Buster Keaton, silent films)
-#   - YouTube (use yt-dlp to download first, then provide local path)
-#   - Any direct .mp4 URL
-
 EPISODES = [
     {
         "number": 1,
-        "title": "The Lion's Cage",
-        "url": "https://www.youtube.com/watch?v=79i84xYelZI",
+        "title": "Pilot",
+        "url": "", # We'll rely on local ep1.mp4
     },
+    {
+        "number": 2,
+        "title": "Cat's in the Bag...",
+        "url": "", # We'll rely on local ep2.mp4
+    },
+    {
+        "number": 3,
+        "title": "And the Bag's in the River",
+        "url": "", # We'll rely on local ep3.mp4
+    }
 ]
 
 # Character names in your series — used in the scene indexing prompt
 CHARACTERS = [
-    "Charlie",
-    "The Tramp",
-    "The Lion",
-    "The Boxer",
-    "The Referee"
+    "Walter White",
+    "Jesse Pinkman",
+    "Skyler White",
+    "Hank Schrader",
+    "Marie Schrader",
+    "Walter Jr."
 ]
 
 # ─────────────────────────────────────────────
